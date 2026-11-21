@@ -3,7 +3,7 @@
 
 데이터 출처 (모두 무료, API 키 불필요)
   - 종목 목록/섹터 : Wikipedia "List of S&P 500 companies"
-  - 지수 소속      : Wikipedia "Nasdaq-100", "Dow Jones Industrial Average" 구성종목 표
+  - 지수 소속      : ETF 운용사 공식 보유종목 파일 (QQQ = 나스닥 100, DIA = 다우 30), 안 되면 Wikipedia 표
                      (못 읽으면 전날 data.json 의 소속 정보를 그대로 쓴다)
   - 종목 → CIK     : SEC company_tickers.json (S&P 500 밖의 나스닥 100 종목용)
   - 재무제표       : SEC EDGAR XBRL companyfacts API (data.sec.gov)
@@ -15,8 +15,10 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import gzip
 import html
+import io
 import json
 import os
 import re
@@ -25,6 +27,8 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 
@@ -35,10 +39,18 @@ PRICE_DELAY = 0.6  # 주가 요청 사이 간격(초). 서버에 부담 주지 �
 
 WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
-# 지수별 구성종목 표가 있는 위키 문서와, 정상이라면 나와야 할 종목 수 범위
+# 지수별 구성종목 출처(앞에서부터 시도)와, 정상이라면 나와야 할 종목 수 범위
+#  - 지수를 그대로 따라가는 ETF의 운용사 공식 보유종목 파일: QQQ(나스닥 100), DIA(다우 30)
+#  - 위키백과 구성종목 표 (문서에서 표가 빠지는 경우가 있어 보조로만 쓴다)
 INDEX_SOURCES = {
-    "ndx": {"name": "나스닥 100", "urls": ["https://en.wikipedia.org/wiki/Nasdaq-100"], "rows": (90, 110)},
-    "dji": {"name": "다우 30", "urls": ["https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"], "rows": (28, 32)},
+    "ndx": {"name": "나스닥 100", "rows": (90, 110), "urls": [
+        ("csv", "https://www.invesco.com/us/financial-products/etfs/holdings/main/holdings/0?audienceType=Investor&action=download&ticker=QQQ"),
+        ("html", "https://en.wikipedia.org/wiki/Nasdaq-100"),
+    ]},
+    "dji": {"name": "다우 30", "rows": (28, 32), "urls": [
+        ("xlsx", "https://www.ssga.com/us/en/intermediary/etfs/library-content/products/fund-data/etfs/us/holdings-daily-us-en-dia.xlsx"),
+        ("html", "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"),
+    ]},
 }
 FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range=1y&interval=1wk&events=split"
@@ -127,12 +139,48 @@ def norm_ticker(s: str) -> str:
     return s if TICKER_RE.match(s) else ""
 
 
-def wiki_tables(page: str):
-    """문서 안의 표를 [[칸, …], …] 으로. 첫 줄이 머리글. 행 머리(<th>)도 칸으로 센다."""
+def html_tables(page: str):
+    """문서 안의 표를 [[칸, …], …] 으로. 행 머리(<th>)도 칸으로 센다."""
     for m in re.finditer(r"<table[^>]*>(.*?)</table>", page, re.S):
         rows = re.findall(r"<tr[^>]*>(.*?)</tr>", m.group(1), re.S)
         grid = [[strip_tags(c) for c in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", r, re.S)] for r in rows]
         yield [g for g in grid if g]
+
+
+def csv_tables(body: bytes):
+    text = body.decode("utf-8-sig", errors="replace")
+    yield [row for row in csv.reader(io.StringIO(text)) if any(c.strip() for c in row)]
+
+
+def xlsx_tables(body: bytes):
+    """표준 라이브러리만으로 .xlsx 의 시트들을 [[칸, …], …] 으로 읽는다."""
+    m_ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    with zipfile.ZipFile(io.BytesIO(body)) as z:
+        names = z.namelist()
+        shared = []
+        if "xl/sharedStrings.xml" in names:
+            for si in ET.fromstring(z.read("xl/sharedStrings.xml")).iter(m_ns + "si"):
+                shared.append("".join(t.text or "" for t in si.iter(m_ns + "t")))
+        for name in sorted(n for n in names if re.match(r"xl/worksheets/sheet\d+\.xml$", n)):
+            grid = []
+            for row in ET.fromstring(z.read(name)).iter(m_ns + "row"):
+                cells = {}
+                for c in row.iter(m_ns + "c"):
+                    col = re.match(r"[A-Z]*", c.get("r", "")).group(0) or "A"
+                    idx = 0
+                    for ch in col:
+                        idx = idx * 26 + ord(ch) - 64
+                    v, inline = c.find(m_ns + "v"), c.find(m_ns + "is")
+                    if c.get("t") == "s" and v is not None:
+                        val = shared[int(v.text)]
+                    elif inline is not None:
+                        val = "".join(t.text or "" for t in inline.iter(m_ns + "t"))
+                    else:
+                        val = v.text if v is not None else ""
+                    cells[idx - 1] = (val or "").strip()
+                if cells:
+                    grid.append([cells.get(i, "") for i in range(max(cells) + 1)])
+            yield grid
 
 
 def pick_col(header: list[str], pattern: str):
@@ -142,34 +190,45 @@ def pick_col(header: list[str], pattern: str):
     return None
 
 
-def load_index(src: dict) -> dict | None:
-    """위키 구성종목 표 → {티커: {"n", "s", "sub"}}. 표 모양이 달라도 머리글 이름으로 칸을 찾는다.
-    종목 수가 정상 범위가 아니면 잘못 읽은 것으로 보고 None."""
-    lo, hi = src["rows"]
-    for url in src["urls"]:
-        try:
-            page = http_get(url, APP_UA).decode("utf-8")
-        except Exception as e:  # noqa: BLE001
-            print(f"  [{src['name']} 목록 실패] {url}: {e}", file=sys.stderr, flush=True)
+def members_from_grid(grid: list[list[str]], lo: int, hi: int):
+    """위쪽 20줄 안에서 티커 칸이 있는 머리글 줄을 찾아 {티커: {"n", "s", "sub"}}.
+    표 모양이 달라도 머리글 이름으로 칸을 찾는다. 종목 수가 정상 범위가 아니면 None."""
+    for h, head in enumerate(grid[:20]):
+        ti = pick_col(head, r"^\s*(holding\s+)?(ticker|symbol)\b")
+        if ti is None:
             continue
-        for grid in wiki_tables(page):
-            if len(grid) < lo:
-                continue
-            head = grid[0]
-            ti = pick_col(head, r"^\s*(ticker|symbol)")
-            if ti is None:
-                continue
-            ni = pick_col(head, r"^\s*(company|security|name)")
-            si = pick_col(head, r"gics\s*sector")
-            ui = pick_col(head, r"gics\s*sub")
-            cell = lambda row, i: row[i] if i is not None and i < len(row) else ""  # noqa: E731
-            out = {}
-            for row in grid[1:]:
-                t = norm_ticker(cell(row, ti))
-                if t:
-                    out[t] = {"n": cell(row, ni), "s": cell(row, si), "sub": cell(row, ui)}
-            if lo <= len(out) <= hi:
-                return out
+        ni = pick_col(head, r"^\s*(company|security|name)")
+        si = pick_col(head, r"gics\s*sector|^\s*sector\s*$")
+        ui = pick_col(head, r"gics\s*sub")
+        cell = lambda row, i: row[i].strip() if i is not None and i < len(row) else ""  # noqa: E731
+        out = {}
+        for row in grid[h + 1:]:
+            t = norm_ticker(cell(row, ti))
+            if t:
+                out[t] = {"n": cell(row, ni), "s": cell(row, si), "sub": cell(row, ui)}
+        if lo <= len(out) <= hi:
+            return out
+    return None
+
+
+def load_index(src: dict) -> dict | None:
+    """출처를 차례로 시도해 {티커: {"n", "s", "sub"}}. 모두 실패하면 None (이유는 로그에 남긴다)."""
+    lo, hi = src["rows"]
+    readers = {"html": lambda b: html_tables(b.decode("utf-8", errors="replace")), "csv": csv_tables, "xlsx": xlsx_tables}
+    for kind, url in src["urls"]:
+        host = url.split("/")[2]
+        try:
+            grids = list(readers[kind](http_get(url, APP_UA, retries=2)))
+        except Exception as e:  # noqa: BLE001
+            print(f"  [{src['name']}] {host}: 읽기 실패 ({str(e)[:150]})", file=sys.stderr, flush=True)
+            continue
+        for grid in grids:
+            got = members_from_grid(grid, lo, hi)
+            if got:
+                print(f"  [{src['name']}] {host}에서 {len(got)}개 읽음", flush=True)
+                return got
+        heads = [" | ".join(g[0][:6])[:90] for g in grids if g][:4]
+        print(f"  [{src['name']}] {host}: 맞는 표 없음 (표 {len(grids)}개, 머리글 예: {heads})", file=sys.stderr, flush=True)
     return None
 
 

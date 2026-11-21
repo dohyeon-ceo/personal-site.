@@ -8,6 +8,11 @@
 - 사이트마다 폴더 하나 (`stock-dashboard/` 등). 새 사이트를 추가하면 루트 `index.html` 목록과 `.github/workflows/deploy.yml` 의 "배포 폴더 구성" 단계에도 추가한다.
 - 사용자는 한국어를 쓰고 주로 휴대폰으로 본다. 화면은 모바일 우선, 하단의 "PC 버전으로 보기"로 PC 화면 전환.
 
+## 아이디어 노트
+
+- 사용자의 코딩 아이디어는 왜(목적)·어떻게(방법)·상태를 함께 적어 Claude 문서 "FIT·코딩 아이디어 노트"(https://claude.ai/artifact/B4QWD9MzLzCtmfS85dbTcE)에 모은다. 작업을 시작할 때 문서 도구가 있으면 먼저 읽고, 새 아이디어나 진행 상황이 생기면 거기에 반영한다.
+- 노트는 코딩 전용이다. 사업 아이디어는 코딩 아이디어와 이어져 새 기회가 보일 때만, 어디서 왔고 무엇과 이어지는지 표시해서 적는다.
+
 ## stock-dashboard
 
 - `site/index.html` 화면 (외부 라이브러리 없음), `site/names.js` 한글 이름표, `site/data.json` 데이터 스냅샷
