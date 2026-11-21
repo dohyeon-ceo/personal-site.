@@ -243,6 +243,19 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; font-siz
 .tier .shr i { display: block; height: 100%; background: var(--accent); }
 .tier .shr-t { font-size: 11px; color: var(--text-3); }
 .tier[aria-pressed=true] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.notice-bg { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.45); display: grid; place-items: end center; padding: 12px; }
+.notice-bg[hidden] { display: none; }
+.notice { width: min(560px, 100%); padding: 18px 18px 14px; margin-bottom: env(safe-area-inset-bottom); }
+.notice > b { font-size: 17px; }
+.notice ul { margin: 10px 0 14px; padding-left: 18px; font-size: 14px; line-height: 1.6; color: var(--text-2); }
+.notice li { margin-bottom: 4px; }
+.notice li b { color: var(--text); }
+.notice-ok { width: 100%; height: 46px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+.notice a { display: block; text-align: center; margin-top: 10px; font-size: 13px; color: var(--text-3); }
+.terms { padding: 6px 16px 14px; font-size: 14px; line-height: 1.7; color: var(--text-2); }
+.terms h3 { font-size: 15px; color: var(--text); margin: 16px 0 4px; }
+.terms ul { margin: 0; padding-left: 18px; }
+.terms b { color: var(--text); }
 .peer { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); cursor: pointer; text-decoration: none; color: inherit; }
 .peer:first-child { border-top: 0; }
 .peer .who .t { font-size: 14px; }
@@ -268,7 +281,7 @@ footer .modebtn { display: inline-block; margin-bottom: 10px; padding: 8px 16px;
   <details class="help box" style="margin-top:18px">
     <summary>점수·용어 설명</summary>
     <dl>
-      <dt>비교 점수</dt><dd>같은 업종 기업들 사이에서 <b>PER(낮을수록 1위), 매출 성장·EPS 성장·영업이익률(높을수록 1위)</b> 순위를 각각 0~100점(1위 100점, 꼴찌 0점)으로 바꿔 평균 낸 값. 기업을 누르면 "점수 근거"에서 계산 과정을 볼 수 있어요. 업종 안에서 상대적으로 "싸면서 잘 크고 잘 버는" 기업일수록 높음. 투자 추천이 아니라 비교 출발점입니다.</dd>
+      <dt>비교 점수</dt><dd>같은 업종 기업들 사이에서 <b>PER(낮을수록 1위), 매출 성장·EPS 성장·영업이익률(높을수록 1위)</b> 순위를 각각 0~100점(1위 100점, 꼴찌 0점)으로 바꿔 평균 낸 값. 기업을 누르면 "점수 근거"에서 계산 과정을 볼 수 있어요. 업종 안에서 상대적으로 "싸면서 잘 크고 잘 버는" 기업일수록 높음. 투자 추천이 아니라 비교 출발점이고, 앞으로의 주가를 예측하지 않아요.</dd>
       <dt>비교 업종</dt><dd>세부분야에 5개 이상 기업이 있으면 그 세부분야끼리, 아니면 같은 섹터 전체와 비교.</dd>
       <dt>지수 선택</dt><dd>전체·S&amp;P 500·나스닥 100·다우 30 중 고르면 그 지수에 속한 기업만 보여줘요. 비교 점수와 순위는 지수와 상관없이 같은 업종의 모든 기업 안에서 계산해서, 지수를 바꿔도 점수는 그대로예요. 나스닥 100 중 S&amp;P 500 밖 기업(ASML·쇼피파이 등 15곳 안팎)은 업종 정보를 아직 못 받아 지금은 빠져 있어요.</dd>
       <dt>PER</dt><dd>주가 ÷ 최근 12개월 주당순이익(EPS). 낮을수록 이익 대비 싸다는 뜻. 적자면 계산하지 않음.</dd>
@@ -281,11 +294,25 @@ footer .modebtn { display: inline-block; margin-bottom: 10px; padding: 8px 16px;
     <button class="modebtn" id="modeBtn"></button><br>
     <span id="updated"></span><br>
     재무: 미국 SEC 공시 · 주가: Yahoo Finance · 종목: S&amp;P 500·나스닥 100·다우 30 (Wikipedia)<br>
-    공시를 자동 가공한 값이라 일부 기업은 누락·오차가 있을 수 있어요. 투자 판단은 본인 책임입니다.
+    <b>투자 권유·추천이 아닌 참고용 정보예요.</b> 공시를 자동 가공한 값이라 틀리거나 늦을 수 있고,
+    투자 결정과 그 결과의 책임은 이용자 본인에게 있어요. <a href="#/terms">이용 안내 · 면책</a>
   </footer>
 </div>
 <nav class="tabbar"><div class="wrap" id="tabbar"></div></nav>
 <div class="tip" id="tip"></div>
+<div class="notice-bg" id="notice" hidden>
+  <div class="notice box" role="dialog" aria-modal="true" aria-labelledby="noticeT">
+    <b id="noticeT">이용 전에 알아두세요</b>
+    <ul>
+      <li><b>투자 권유나 추천이 아니에요.</b> 미국 상장사 공시 숫자를 모아 비교해 보여주는 참고용 정보예요.</li>
+      <li>비교 점수·기회 지도는 같은 업종 안에서 숫자를 줄 세운 결과일 뿐, <b>앞으로의 주가나 수익을 예측하지 않아요.</b></li>
+      <li>자동으로 가공한 데이터라 <b>틀리거나 늦을 수 있어요.</b> 중요한 결정 전에는 회사 공시 원문으로 확인하세요.</li>
+      <li><b>투자 결정과 그 결과의 책임은 본인</b>에게 있어요.</li>
+    </ul>
+    <button class="notice-ok" id="noticeOk">확인했어요</button>
+    <a href="#/terms" id="noticeMore">자세한 이용 안내 보기</a>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -419,6 +446,7 @@ function route() {
   hideTip();
   if (a === "s" && b) pageSector(b, c || "");
   else if (a === "cap") pageCap(b || "");
+  else if (a === "terms") pageTerms();
   else if (a === "c" && b && BY_T[b]) pageCompany(BY_T[b]);
   else if (a === "search") pageSearch();
   else if (a === "watch") pageWatch();
@@ -923,6 +951,51 @@ function showTip(e, html) {
 function hideTip() { tip.style.display = "none"; }
 document.addEventListener("scroll", hideTip, { passive: true });
 
+// ---------------- 이용 안내 · 면책 ----------------
+// 바꿀 때는 아래 날짜도 고친다. 측정 도구(GA 등)를 넣으면 '개인정보' 항목을 반드시 함께 고친다.
+const TERMS_DATE = "2026-11-21";
+function pageTerms() {
+  setTop("이용 안내 · 면책", "/");
+  $("#main").innerHTML = `<div class="box terms">
+    <h3>이 사이트는</h3>
+    <p>개인이 만든 무료 정보 페이지예요. 미국 상장사의 공시 숫자(매출·이익·PER 등)를 모아 같은 업종끼리 비교해 보여줘요.</p>
+    <h3>투자 권유가 아니에요</h3>
+    <ul>
+      <li>특정 종목을 <b>사라거나 팔라고 권하거나 추천하지 않아요.</b></li>
+      <li><b>비교 점수·배지·기회 지도</b>는 공시 숫자를 같은 업종 안에서 줄 세운 결과일 뿐이에요. 앞으로의 주가나 수익을 <b>예측하거나 보장하지 않아요.</b></li>
+      <li>점수가 높다고 좋은 투자처라는 뜻이 아니고, 낮다고 나쁜 투자처라는 뜻도 아니에요.</li>
+    </ul>
+    <h3>데이터의 한계</h3>
+    <ul>
+      <li>공시 자료를 프로그램으로 <b>자동 가공</b>해서 오류·누락이 있을 수 있어요. 주식 분할, 회계 기준 변경, 주식 종류가 여러 개인 회사 등은 특히 틀리기 쉬워요.</li>
+      <li>주가는 <b>실시간이 아니에요.</b> 평일 하루 한 번 받아오고, 받아오지 못한 날은 이전 값이 그대로 보여요 (화면 오른쪽 위 업데이트 시각 참고).</li>
+      <li>중요한 결정 전에는 회사 공시 원문(<a href="https://www.sec.gov/edgar/search/" target="_blank" rel="noopener">SEC EDGAR</a>)이나 증권사 정보로 꼭 확인하세요.</li>
+    </ul>
+    <h3>책임</h3>
+    <p><b>투자 결정과 그 결과의 책임은 이용자 본인에게 있어요.</b> 운영자는 이 사이트의 정보를 이용해 생긴 손실이나 손해에 책임을 지지 않아요.</p>
+    <h3>데이터 출처</h3>
+    <ul>
+      <li>재무: 미국 증권거래위원회(SEC) <a href="https://www.sec.gov/edgar" target="_blank" rel="noopener">EDGAR</a> 공개 자료</li>
+      <li>주가: Yahoo Finance — 각 출처의 이용 약관을 따르며 개인적·비상업적 참고용으로만 보여줘요</li>
+      <li>지수 구성종목: <a href="https://en.wikipedia.org/wiki/List_of_S%26P_500_companies" target="_blank" rel="noopener">Wikipedia</a>(CC BY-SA), Nasdaq·ETF 운용사의 공개 목록</li>
+      <li>각 회사명·상표는 해당 회사의 것이에요.</li>
+    </ul>
+    <h3>개인정보</h3>
+    <p>회원가입·로그인이 없어요. 관심 종목과 화면 설정은 <b>이 기기의 브라우저에만</b> 저장되고, 운영자에게 보내지지 않아요.</p>
+    <p class="muted" style="font-size:12px;margin-top:14px">마지막 수정: ${TERMS_DATE}</p>
+  </div>`;
+  scrollTo(0, 0);
+}
+function showNotice() {
+  if (store.get("noticeOk", "") === TERMS_DATE) return; // 확인한 뒤로 내용이 바뀌면 다시 보여준다
+  const bg = $("#notice");
+  bg.hidden = false;
+  const ok = () => { store.set("noticeOk", TERMS_DATE); bg.hidden = true; };
+  $("#noticeOk").onclick = ok;
+  $("#noticeMore").onclick = ok;
+  $("#noticeOk").focus();
+}
+
 // ---------------- 데이터 업데이트 시각 · 지연 알림 ----------------
 // 자동 갱신 예정: 평일(UTC 월~금) 22:17 UTC, 수집에 10분 안팎 → 23:02 UTC까지 안 들어오면 '놓친 회차'로 센다
 function missedRuns(updated, now) {
@@ -969,6 +1042,7 @@ fetch("data.json", { cache: "no-cache" }).then((r) => r.json()).then((d) => {
   const scope = HAS_IX ? INDEXES.filter(([k]) => k !== "all" && ixCount(k)).map(([, lb]) => lb).join("·") : "S&P 500";
   $("#updated").textContent = `${scope} ${d.count}개 기업 · ${dt.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })} 업데이트`;
   showFresh(dt);
+  showNotice();
   addEventListener("hashchange", route);
   route();
 }).catch((err) => { $("#main").innerHTML = `<div class="empty"><b>데이터를 불러오지 못했어요</b>${esc(err)}</div>`; });
