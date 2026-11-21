@@ -5,7 +5,7 @@
 
 | 폴더 | 내용 |
 |---|---|
-| [`stock-dashboard/`](stock-dashboard/) | 미국 S&P 500 기업의 PER·성장률을 분야별로 비교하는 대시보드 (모바일 중심, 매일 자동 갱신) |
+| [`stock-dashboard/`](stock-dashboard/) | **FIT (Find Top)** — 미국 S&P 500 기업의 PER·성장률을 분야별로 비교하는 대시보드 (모바일 중심, 매일 자동 갱신) |
 
 ## 배포 (GitHub Pages)
 

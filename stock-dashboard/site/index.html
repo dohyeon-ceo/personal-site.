@@ -5,7 +5,8 @@
 <meta name="viewport" id="vp" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
-<title>미국 주식 분야별 비교 — PER · 성장률</title>
+<title>FIT — Find Top · 미국 주식 분야별 비교</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a78d6'/%3E%3Ctext x='32' y='43' font-family='Arial Black,Arial,sans-serif' font-weight='900' font-size='26' fill='white' text-anchor='middle'%3EFIT%3C/text%3E%3C/svg%3E">
 <script>
   // PC 버전 보기: 저장된 선택이 있으면 그것을, 없으면 화면 폭으로 결정
   (function () {
@@ -51,6 +52,22 @@ a { color: var(--accent); }
 /* 상단바 */
 .topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); }
 .topbar .wrap { display: flex; align-items: center; gap: 8px; min-height: 52px; }
+/* 브랜드: FIT = Find Top + 내 기준에 딱 맞는(Fit) 기업 */
+.logo { display: inline-flex; align-items: flex-end; gap: .06em; font-weight: 900; letter-spacing: -0.01em; line-height: 1;
+  font-family: "Arial Black", "Helvetica Neue", -apple-system, sans-serif; color: var(--text); }
+.logo .i { display: inline-block; width: .24em; height: 1em; margin: 0 .04em; background: linear-gradient(180deg, var(--up), var(--accent));
+  clip-path: polygon(50% 0, 100% 26%, 100% 100%, 0 100%, 0 26%); transform: translateY(-.02em); }
+.brand-bar { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; }
+.brand-bar .logo { font-size: 24px; }
+.brand-bar .ft { font-size: 13px; color: var(--text-3); font-weight: 600; letter-spacing: .02em; }
+.ft b, .hero-brand b { color: var(--accent); font-weight: 800; }
+.hero-brand { padding: 16px 16px 14px; margin-top: 4px; position: relative; overflow: hidden; }
+.hero-brand .logo { font-size: 44px; }
+.hero-brand .ft { font-size: 17px; font-weight: 700; color: var(--text); margin-top: 8px; letter-spacing: .01em; }
+.hero-brand .ft2 { font-size: 13.5px; color: var(--text-2); margin-top: 3px; }
+.hero-brand .ft2 b { color: var(--up); }
+.hero-brand::after { content: ""; position: absolute; right: -20px; top: -20px; width: 120px; height: 120px; border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-soft), transparent 70%); }
 .topbar h1 { font-size: 18px; margin: 0; letter-spacing: -0.02em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .iconbtn { width: 40px; height: 40px; border: 0; background: none; border-radius: 10px; font-size: 22px; cursor: pointer; display: grid; place-items: center; flex: none; }
 .iconbtn:active { background: var(--surface-2); }
@@ -374,7 +391,7 @@ function renderTabs(cur = (location.hash.split("/")[1] || "")) {
 
 // ---------------- 홈: 분야 목록 ----------------
 function pageHome() {
-  setTop("분야별로 좋은 기업 찾기");
+  $("#topbar").innerHTML = `<div class="brand-bar"><span class="logo" aria-label="FIT">F<span class="i" aria-hidden="true"></span>T</span><span class="ft"><b>F</b><b>i</b>nd <b>T</b>op</span></div>`;
   const html = SECTORS.map((s) => {
     const m = ALL.filter((r) => r.s === s);
     const top = m.filter((r) => r.score != null).sort((a, b) => b.score - a.score).slice(0, 3);
@@ -388,7 +405,12 @@ function pageHome() {
       <div class="toppicks">점수 상위 ${top.map((r) => `<span class="pill">${esc(r.t)}</span>`).join("")}</div>
     </a>`;
   }).join("");
-  $("#main").innerHTML = `<div class="section-title">어느 분야에 투자하고 싶으세요? <span class="hint">분야를 누르면 그 안의 기업들을 비교해요</span></div>
+  $("#main").innerHTML = `<div class="box hero-brand">
+      <span class="logo" aria-label="FIT">F<span class="i" aria-hidden="true"></span>T</span>
+      <div class="ft"><b>F</b><b>i</b>nd <b>T</b>op <span style="color:var(--text-3);font-weight:500">— 최고를 찾다</span></div>
+      <div class="ft2">내 기준에 딱 맞는(<b>Fit</b>) 기업을 분야별로 비교해 찾아요</div>
+    </div>
+    <div class="section-title">어느 분야에 투자하고 싶으세요? <span class="hint">분야를 누르면 그 안의 기업들을 비교해요</span></div>
     <div class="sector-grid">${html}</div>`;
 }
 
