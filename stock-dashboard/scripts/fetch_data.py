@@ -3,7 +3,7 @@
 
 데이터 출처 (모두 무료, API 키 불필요)
   - 종목 목록/섹터 : Wikipedia "List of S&P 500 companies"
-  - 지수 소속      : ETF 운용사 공식 보유종목 파일 (QQQ = 나스닥 100, DIA = 다우 30), 안 되면 Wikipedia 표
+  - 지수 소속      : Nasdaq 공식 목록·ETF 운용사 보유종목 파일(QQQ, DIA), 안 되면 Wikipedia 표
                      (못 읽으면 전날 data.json 의 소속 정보를 그대로 쓴다)
   - 종목 → CIK     : SEC company_tickers.json (S&P 500 밖의 나스닥 100 종목용)
   - 재무제표       : SEC EDGAR XBRL companyfacts API (data.sec.gov)
@@ -44,7 +44,10 @@ TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 #  - 위키백과 구성종목 표 (문서에서 표가 빠지는 경우가 있어 보조로만 쓴다)
 INDEX_SOURCES = {
     "ndx": {"name": "나스닥 100", "rows": (90, 110), "urls": [
+        ("json", "https://api.nasdaq.com/api/quote/list-type/nasdaq100"),  # 지수 운영사(Nasdaq) 공식 목록
         ("csv", "https://www.invesco.com/us/financial-products/etfs/holdings/main/holdings/0?audienceType=Investor&action=download&ticker=QQQ"),
+        ("html", "https://it.wikipedia.org/wiki/NASDAQ-100"),
+        ("html", "https://de.wikipedia.org/wiki/NASDAQ-100"),
         ("html", "https://en.wikipedia.org/wiki/Nasdaq-100"),
     ]},
     "dji": {"name": "다우 30", "rows": (28, 32), "urls": [
@@ -183,6 +186,21 @@ def xlsx_tables(body: bytes):
             yield grid
 
 
+def json_tables(body: bytes):
+    """JSON 안에서 같은 모양의 객체가 줄지어 있는 목록을 찾아 [[머리글…], [값…], …] 으로."""
+    def walk(x):
+        if isinstance(x, list) and x and all(isinstance(i, dict) for i in x):
+            keys = list(x[0])
+            yield [keys] + [[str(i.get(k, "") or "") for k in keys] for i in x]
+        elif isinstance(x, dict):
+            for v in x.values():
+                yield from walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                yield from walk(v)
+    yield from walk(json.loads(body))
+
+
 def pick_col(header: list[str], pattern: str):
     for i, h in enumerate(header):
         if re.search(pattern, h, re.I):
@@ -194,10 +212,10 @@ def members_from_grid(grid: list[list[str]], lo: int, hi: int):
     """위쪽 20줄 안에서 티커 칸이 있는 머리글 줄을 찾아 {티커: {"n", "s", "sub"}}.
     표 모양이 달라도 머리글 이름으로 칸을 찾는다. 종목 수가 정상 범위가 아니면 None."""
     for h, head in enumerate(grid[:20]):
-        ti = pick_col(head, r"^\s*(holding\s+)?(ticker|symbol)\b")
+        ti = pick_col(head, r"^\s*(holding\s+)?(ticker|symbol|simbolo|kürzel)")
         if ti is None:
             continue
-        ni = pick_col(head, r"^\s*(company|security|name)")
+        ni = pick_col(head, r"^\s*(company|security|name|società|unternehmen)")
         si = pick_col(head, r"gics\s*sector|^\s*sector\s*$")
         ui = pick_col(head, r"gics\s*sub")
         cell = lambda row, i: row[i].strip() if i is not None and i < len(row) else ""  # noqa: E731
@@ -214,7 +232,8 @@ def members_from_grid(grid: list[list[str]], lo: int, hi: int):
 def load_index(src: dict) -> dict | None:
     """출처를 차례로 시도해 {티커: {"n", "s", "sub"}}. 모두 실패하면 None (이유는 로그에 남긴다)."""
     lo, hi = src["rows"]
-    readers = {"html": lambda b: html_tables(b.decode("utf-8", errors="replace")), "csv": csv_tables, "xlsx": xlsx_tables}
+    readers = {"html": lambda b: html_tables(b.decode("utf-8", errors="replace")), "csv": csv_tables, "xlsx": xlsx_tables,
+               "json": json_tables}
     for kind, url in src["urls"]:
         host = url.split("/")[2]
         try:
