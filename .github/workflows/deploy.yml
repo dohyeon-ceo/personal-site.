@@ -1,0 +1,55 @@
+# 개인 사이트 모음을 GitHub Pages에 배포한다.
+#   https://<아이디>.github.io/personal-site/                  ← 사이트 목록 (index.html)
+#   https://<아이디>.github.io/personal-site/stock-dashboard/  ← 미국 주식 분야별 비교
+# 주식 데이터는 평일 매일 미국 장 마감 후 새로 받는다.
+name: 사이트 배포
+
+on:
+  schedule:
+    - cron: "17 22 * * 1-5"   # 평일 22:17 UTC (한국 시간 다음날 07:17)
+  workflow_dispatch:           # Actions 탭에서 수동 실행
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 주식 데이터 수집 (SEC · Yahoo · Wikipedia)
+        env:
+          # SEC는 연락처가 들어간 User-Agent를 권장한다. 저장소 Settings > Variables 에 등록 가능.
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT || 'PersonalStockDashboard contact@example.com' }}
+        run: python3 stock-dashboard/scripts/fetch_data.py --out stock-dashboard/site/data.json
+      - name: 배포 폴더 구성
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r stock-dashboard/site _site/stock-dashboard
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
