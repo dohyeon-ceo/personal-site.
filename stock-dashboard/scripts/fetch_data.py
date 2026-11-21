@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""S&P 500 기업의 주가 + 재무 데이터를 모아 site/data.json 으로 저장한다.
+"""S&P 500 (+ 나스닥 100·다우 30) 기업의 주가 + 재무 데이터를 모아 site/data.json 으로 저장한다.
 
 데이터 출처 (모두 무료, API 키 불필요)
   - 종목 목록/섹터 : Wikipedia "List of S&P 500 companies"
+  - 지수 소속      : Wikipedia "Nasdaq-100", "Dow Jones Industrial Average" 구성종목 표
+                     (못 읽으면 전날 data.json 의 소속 정보를 그대로 쓴다)
+  - 종목 → CIK     : SEC company_tickers.json (S&P 500 밖의 나스닥 100 종목용)
   - 재무제표       : SEC EDGAR XBRL companyfacts API (data.sec.gov)
   - 주가           : Yahoo Finance chart API
 
@@ -31,6 +34,12 @@ APP_UA = "PersonalStockDashboard/1.0"
 PRICE_DELAY = 0.6  # 주가 요청 사이 간격(초). 서버에 부담 주지 않도록 순차 + 간격
 
 WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
+# 지수별 구성종목 표가 있는 위키 문서와, 정상이라면 나와야 할 종목 수 범위
+INDEX_SOURCES = {
+    "ndx": {"name": "나스닥 100", "urls": ["https://en.wikipedia.org/wiki/Nasdaq-100"], "rows": (90, 110)},
+    "dji": {"name": "다우 30", "urls": ["https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"], "rows": (28, 32)},
+}
 FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range=1y&interval=1wk&events=split"
 
@@ -105,6 +114,119 @@ def load_sp500() -> list[dict]:
     if len(out) < 400:
         raise RuntimeError(f"S&P 500 종목 수가 이상함: {len(out)}")
     return out
+
+
+# ---------------------------------------------------------------- 지수 소속 (나스닥 100 · 다우 30)
+TICKER_RE = re.compile(r"^[A-Z][A-Z0-9]{0,5}(\.[A-Z0-9]{1,2})?$")
+
+
+def norm_ticker(s: str) -> str:
+    """'NYSE: MMM', 'GOOGL[1]', 'brk-b' 같은 표기를 S&P 500 표와 같은 'BRK.B' 꼴로 맞춘다."""
+    s = re.sub(r"\[[^\]]*\]", "", s).split(":")[-1].strip()
+    s = s.split()[0].upper().replace("-", ".") if s else ""
+    return s if TICKER_RE.match(s) else ""
+
+
+def wiki_tables(page: str):
+    """문서 안의 표를 [[칸, …], …] 으로. 첫 줄이 머리글. 행 머리(<th>)도 칸으로 센다."""
+    for m in re.finditer(r"<table[^>]*>(.*?)</table>", page, re.S):
+        rows = re.findall(r"<tr[^>]*>(.*?)</tr>", m.group(1), re.S)
+        grid = [[strip_tags(c) for c in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", r, re.S)] for r in rows]
+        yield [g for g in grid if g]
+
+
+def pick_col(header: list[str], pattern: str):
+    for i, h in enumerate(header):
+        if re.search(pattern, h, re.I):
+            return i
+    return None
+
+
+def load_index(src: dict) -> dict | None:
+    """위키 구성종목 표 → {티커: {"n", "s", "sub"}}. 표 모양이 달라도 머리글 이름으로 칸을 찾는다.
+    종목 수가 정상 범위가 아니면 잘못 읽은 것으로 보고 None."""
+    lo, hi = src["rows"]
+    for url in src["urls"]:
+        try:
+            page = http_get(url, APP_UA).decode("utf-8")
+        except Exception as e:  # noqa: BLE001
+            print(f"  [{src['name']} 목록 실패] {url}: {e}", file=sys.stderr, flush=True)
+            continue
+        for grid in wiki_tables(page):
+            if len(grid) < lo:
+                continue
+            head = grid[0]
+            ti = pick_col(head, r"^\s*(ticker|symbol)")
+            if ti is None:
+                continue
+            ni = pick_col(head, r"^\s*(company|security|name)")
+            si = pick_col(head, r"gics\s*sector")
+            ui = pick_col(head, r"gics\s*sub")
+            cell = lambda row, i: row[i] if i is not None and i < len(row) else ""  # noqa: E731
+            out = {}
+            for row in grid[1:]:
+                t = norm_ticker(cell(row, ti))
+                if t:
+                    out[t] = {"n": cell(row, ni), "s": cell(row, si), "sub": cell(row, ui)}
+            if lo <= len(out) <= hi:
+                return out
+    return None
+
+
+def previous_data(path: str) -> tuple[dict, dict]:
+    """전날 data.json 에서 (지수별 소속 티커, 티커별 이름·섹터). 목록을 못 읽은 날의 대비책."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            old = json.load(fh)
+    except Exception:  # noqa: BLE001
+        return {}, {}
+    members: dict[str, set] = {}
+    info = {}
+    for r in old.get("companies", []):
+        info[r["t"]] = {"n": r.get("n", ""), "s": r.get("s", ""), "sub": r.get("sub", "")}
+        for k in r.get("ix") or []:
+            members.setdefault(k, set()).add(r["t"])
+    return members, info
+
+
+def load_memberships(companies: list[dict], prev_path: str) -> tuple[dict, list[dict]]:
+    """지수별 소속 티커 집합과, S&P 500 밖이라 새로 넣을 종목 목록을 만든다.
+    새 종목은 SEC CIK와 GICS 섹터를 알 수 있을 때만 넣는다 (업종 비교가 가능해야 하므로)."""
+    sp = {c["t"] for c in companies}
+    sectors = {c["s"] for c in companies}
+    prev_members, prev_info = previous_data(prev_path)
+    members = {"sp": set(sp)}
+    extra_info = {}
+    for key, src in INDEX_SOURCES.items():
+        got = load_index(src)
+        if got is None:
+            old = prev_members.get(key, set())
+            got = {t: prev_info.get(t, {}) for t in old}
+            print(f"  {src['name']}: 목록을 못 읽어 이전 소속 정보 사용 ({len(got)}개)", flush=True)
+        else:
+            print(f"  {src['name']}: {len(got)}개 (S&P 500과 겹침 {len(set(got) & sp)}개)", flush=True)
+        members[key] = set(got)
+        for t, info in got.items():
+            if t not in sp:  # 표에 섹터가 없으면 전날 알던 섹터로 채운다
+                filled = {**prev_info.get(t, {}), **{k: v for k, v in info.items() if v}}
+                extra_info.setdefault(t, filled)
+
+    extras = []
+    if extra_info:
+        try:
+            raw = json.loads(http_get(TICKERS_URL, SEC_UA, sec=True))
+            ciks = {v["ticker"].upper().replace("-", "."): str(v["cik_str"]).zfill(10) for v in raw.values()}
+        except Exception as e:  # noqa: BLE001
+            print(f"  [CIK 목록 실패] {e}", file=sys.stderr, flush=True)
+            ciks = {}
+        for t, info in sorted(extra_info.items()):
+            cik = ciks.get(t)
+            if not cik or info.get("s") not in sectors:
+                print(f"  [추가 제외] {t}: CIK 또는 GICS 섹터를 알 수 없음", flush=True)
+                continue
+            extras.append({"t": t, "n": info.get("n") or t, "s": info["s"], "sub": info.get("sub") or info["s"],
+                           "cik": cik, "extra": True})
+    return members, extras
 
 
 # ---------------------------------------------------------------- 재무
@@ -316,9 +438,11 @@ def main() -> int:
 
     t0 = time.time()
     companies = load_sp500()
+    members, extras = load_memberships(companies, args.out)
+    companies += extras
     if args.limit:
         companies = companies[: args.limit]
-    print(f"종목 {len(companies)}개", flush=True)
+    print(f"종목 {len(companies)}개 (S&P 500 밖 추가 {len(extras)}개)", flush=True)
 
     ciks = sorted({c["cik"] for c in companies})
     fin: dict[str, dict] = {}
@@ -376,10 +500,15 @@ def main() -> int:
             mcap = pe * f["ni"]  # 순이익 × PER = 시가총액 (주식 클래스 문제 회피)
         elif price and shares:
             mcap = price * shares
-        if mcap is not None and mcap < 2e9:  # S&P 500 기업이 20억 달러 미만일 리 없음 → 주식수 오류
+        if mcap is not None and mcap < 2e9:  # 지수 편입 대형주가 20억 달러 미만일 리 없음 → 주식수 오류
             pe = mcap = None
+        if c.get("extra") and f.get("rev") is None and f.get("ni") is None:
+            # 미국 회계기준(us-gaap) 공시가 없는 외국 기업 등: 비교할 숫자가 없으니 넣지 않는다
+            print(f"  [추가 제외] {c['t']}: 미국 공시 재무 데이터 없음", flush=True)
+            continue
         rows.append({
             "t": c["t"], "n": c["n"], "s": c["s"], "sub": c["sub"],
+            "ix": [k for k in ("sp", "ndx", "dji") if c["t"] in members.get(k, ())],
             "price": rnd(price, 2), "chg1y": rnd(p.get("chg1y")), "hi52": rnd(p.get("hi52"), 2),
             "mcap": round(mcap) if mcap else None,
             "pe": rnd(pe, 2), "eps": rnd(eps, 3), "epsG": rnd(f.get("epsG")),

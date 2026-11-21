@@ -11,6 +11,7 @@
 ## stock-dashboard
 
 - `site/index.html` 화면 (외부 라이브러리 없음), `site/names.js` 한글 이름표, `site/data.json` 데이터 스냅샷
-- `scripts/fetch_data.py` 데이터 수집 (표준 라이브러리만). 출처: SEC EDGAR(재무), Yahoo Finance(주가), Wikipedia(S&P 500 목록)
+- `scripts/fetch_data.py` 데이터 수집 (표준 라이브러리만). 출처: SEC EDGAR(재무), Yahoo Finance(주가), Wikipedia(S&P 500 목록, 나스닥 100·다우 30 구성종목)
+- 지수 소속은 종목마다 `ix` 배열(`sp`·`ndx`·`dji`). 화면의 지수 선택은 보여줄 기업만 거르고, 비교 점수는 항상 전체 기업 기준이다. 지수 목록을 못 읽은 날은 전날 `data.json`의 소속을 쓰고 수집은 계속한다.
 - Yahoo 요청은 순차 + 간격을 두고, 429 응답에는 기다렸다 재시도한다. User-Agent나 호스트를 바꿔가며 제한을 우회하지 않는다.
 - 로컬 실행: `python3 stock-dashboard/scripts/fetch_data.py --out stock-dashboard/site/data.json` 후 `python3 -m http.server -d stock-dashboard/site 8000`
