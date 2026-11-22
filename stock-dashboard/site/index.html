@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<!-- Google 태그 (방문 측정: Google 애널리틱스 'FIT' 웹 스트림). 바꾸거나 빼면 이용 안내의 '개인정보' 항목도 함께 고친다 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=GTM-WM4PPP8L"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+</script>
 <meta charset="utf-8">
 <meta name="viewport" id="vp" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
@@ -953,7 +960,7 @@ document.addEventListener("scroll", hideTip, { passive: true });
 
 // ---------------- 이용 안내 · 면책 ----------------
 // 바꿀 때는 아래 날짜도 고친다. 측정 도구(GA 등)를 넣으면 '개인정보' 항목을 반드시 함께 고친다.
-const TERMS_DATE = "2026-11-21";
+const TERMS_DATE = "2026-11-22";
 function pageTerms() {
   setTop("이용 안내 · 면책", "/");
   $("#main").innerHTML = `<div class="box terms">
@@ -982,6 +989,7 @@ function pageTerms() {
     </ul>
     <h3>개인정보</h3>
     <p>회원가입·로그인이 없어요. 관심 종목과 화면 설정은 <b>이 기기의 브라우저에만</b> 저장되고, 운영자에게 보내지지 않아요.</p>
+    <p><b>방문 통계:</b> 어떤 화면이 얼마나 쓰이는지 보려고 <a href="https://policies.google.com/technologies/partner-sites?hl=ko" target="_blank" rel="noopener">Google 애널리틱스</a>를 써요. 본 화면, 머문 시간, 대략적인 지역·기기 종류 같은 정보가 쿠키를 통해 Google로 전송되고, 운영자는 사람을 알아볼 수 없는 합계 통계로만 봐요. 이름·연락처는 받지 않고, 관심 종목 목록도 보내지 않아요. 원하지 않으면 브라우저 설정에서 쿠키나 추적을 막으면 돼요.</p>
     <p class="muted" style="font-size:12px;margin-top:14px">마지막 수정: ${TERMS_DATE}</p>
   </div>`;
   scrollTo(0, 0);
