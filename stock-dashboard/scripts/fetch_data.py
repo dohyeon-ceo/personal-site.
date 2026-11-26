@@ -633,6 +633,21 @@ def add_score_history(rows: list, fin_by_t: dict, prices: dict) -> None:
                 sh["v"][m].append(rnd(v[cq][m], 4) if v[cq][m] is not None else None)
         if any(x is not None for x in sh["s"]):
             r["sh"] = sh
+        # 점수와 함께 그릴 주간 주가: 첫 분기 시작 무렵부터 지금까지, 7일 간격으로 맞춘다 (d0 = 첫 날짜)
+        hist = (prices.get(r["t"]) or {}).get("hist") or []
+        if r.get("sh") and hist:
+            first = qs[0]
+            start = date(int(first[:4]), (int(first[5]) - 1) * 3 + 1, 1) - timedelta(days=60)
+            days = [day for day, _ in hist if day >= start]
+            if days:
+                d0, last, ws, j = days[0], hist[-1][0], [], 0
+                cur = d0
+                while cur <= last:
+                    while j + 1 < len(hist) and hist[j + 1][0] <= cur:
+                        j += 1
+                    ws.append(round(hist[j][1], 2) if hist[j][0] <= cur else None)
+                    cur += timedelta(days=7)
+                r["px"] = {"d0": d0.isoformat(), "w": ws}
 
 
 # ---------------------------------------------------------------- 조립

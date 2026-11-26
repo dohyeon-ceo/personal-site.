@@ -242,6 +242,8 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; font-siz
 .trend-svg { width: 100%; height: auto; display: block; margin-top: 4px; overflow: visible; }
 .trend-svg text { fill: var(--text-3); font-size: 10.5px; }
 .trend-svg .tv { fill: var(--text); font-size: 12px; font-weight: 700; }
+.trend-svg .sb { fill: var(--text); font-size: 10.5px; font-weight: 750; pointer-events: none; }
+.trend-svg .sb.now { fill: #fff; }
 .trend-cap { font-size: 11.5px; color: var(--text-3); margin-top: 2px; line-height: 1.5; }
 .trend-vals { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--text-2); margin-top: 4px; }
 .trend-vals i { font-style: normal; color: var(--text-3); margin-right: 4px; }
@@ -876,14 +878,66 @@ function trendSvg(qs, vals, tipOf, now) {
   });
   return `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="분기별 점수 추이">${g}</svg>`;
 }
+// 주가 선 위에, 각 분기 말 자리에 그때 비교 점수를 동그라미 숫자로 올린다 (축은 주가 하나)
+const qEnd = (q) => { const y = +q.slice(0, 4), n = +q.slice(5); return new Date(Date.UTC(y, n * 3, 0)); };
+function priceScoreSvg(r) {
+  const px = r.px, sh = r.sh;
+  const W = PC ? 560 : 360, H = 210, L = 44, R = 22, T = 20, B = 22;
+  const d0 = new Date(px.d0 + "T00:00:00Z").getTime(), wk = 7 * 864e5;
+  const pts = px.w.map((c, i) => ({ t: d0 + i * wk, c })).filter((p) => p.c != null);
+  if (pts.length < 2) return "";
+  const nowT = pts[pts.length - 1].t, t0 = pts[0].t;
+  const X = (t) => L + (t - t0) / (nowT - t0) * (W - L - R);
+  const cs = pts.map((p) => p.c);
+  const ticks = niceTicks(Math.min(...cs), Math.max(...cs), 3);
+  const lo = ticks[0], hi = ticks[ticks.length - 1];
+  const Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const priceAt = (t) => { let best = pts[0]; for (const p of pts) { if (p.t <= t + 3 * 864e5) best = p; else break; } return best; };
+  const fmtP = (v) => "$" + (v >= 1000 ? Math.round(v).toLocaleString() : v >= 100 ? v.toFixed(0) : v.toFixed(1));
+  const fmtD = (t) => { const d = new Date(t); return d.getUTCFullYear() + "." + (d.getUTCMonth() + 1) + "." + d.getUTCDate(); };
+  let g = "";
+  for (const v of ticks) {
+    g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="var(--grid)"/>';
+    g += '<text x="' + (L - 6) + '" y="' + (Y(v) + 3.5) + '" text-anchor="end">' + fmtP(v) + '</text>';
+  }
+  // 분기 말 세로선 + 아래 라벨
+  const marks = sh.q.map((q, i) => ({ q, t: qEnd(q).getTime(), s: sh.s[i] })).filter((m) => m.t >= t0 && m.t <= nowT);
+  const step = Math.ceil(marks.length / 4);
+  marks.forEach((m, i) => {
+    g += '<line x1="' + X(m.t) + '" x2="' + X(m.t) + '" y1="' + T + '" y2="' + (H - B) + '" stroke="var(--grid)" stroke-dasharray="2 3"/>';
+    if ((marks.length - 1 - i) % step === 0) g += '<text x="' + X(m.t) + '" y="' + (H - 6) + '" text-anchor="middle">' + qShort(m.q) + '</text>';
+  });
+  g += '<text x="' + X(nowT) + '" y="' + (H - 6) + '" text-anchor="end">지금</text>';
+  // 주가 선
+  const d = pts.map((p, i) => (i ? "L" : "M") + X(p.t).toFixed(1) + "," + Y(p.c).toFixed(1)).join("");
+  g += '<path d="' + d + '" fill="none" stroke="var(--text-3)" stroke-width="1.6" stroke-linejoin="round"/>';
+  // 주간 툴팁 영역 (선 근처 아무 데나 누르면 그 주 주가)
+  const slot = (W - L - R) / (pts.length - 1);
+  pts.forEach((p) => {
+    g += '<rect x="' + (X(p.t) - slot / 2) + '" y="' + T + '" width="' + slot + '" height="' + (H - T - B) + '" fill="transparent" data-tip="' + esc(fmtD(p.t) + " 주<br><b>주가 " + fmtP(p.c) + "</b>") + '"/>';
+  });
+  // 점수 동그라미 (분기 말 주가 자리)
+  const bubble = (t, sc, isNow, tip) => {
+    const p = priceAt(t), x = X(t), y = Math.max(T + 2, Math.min(H - B - 12, Y(p.c))), tp = esc(tip);
+    return '<circle cx="' + x + '" cy="' + y + '" r="16" fill="transparent" data-tip="' + tp + '"/>' +
+      '<circle cx="' + x + '" cy="' + y + '" r="11" fill="' + (isNow ? "var(--accent)" : "var(--surface)") + '" stroke="var(--accent)" stroke-width="1.8" data-tip="' + tp + '"/>' +
+      '<text class="sb' + (isNow ? " now" : "") + '" x="' + x + '" y="' + (y + 3.8) + '" text-anchor="middle">' + sc + '</text>';
+  };
+  marks.forEach((m) => { if (m.s != null) g += bubble(m.t, m.s, false, qLong(m.q) + "<br>주가 " + fmtP(priceAt(m.t).c) + " · <b>비교 점수 " + m.s + "점</b>"); });
+  if (r.score != null) g += bubble(nowT, r.score, true, "지금 (오늘 주가 기준)<br>주가 " + fmtP(r.price ?? pts[pts.length - 1].c) + " · <b>비교 점수 " + r.score + "점</b>");
+  return '<svg class="trend-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="주가와 분기별 비교 점수">' + g + '</svg>';
+}
 function bindWhy(r) {
   if (!r.sh) return;
   const sh = r.sh;
   const scoreTip = (i, isNow) => isNow ? `지금 (오늘 주가 기준)<br><b>비교 점수 ${r.score ?? "–"}점</b>`
     : `${qLong(sh.q[i])}<br><b>비교 점수 ${sh.s[i] ?? "없음"}${sh.s[i] == null ? "" : "점"}</b>`;
   const box = $("#trendScore");
-  box.innerHTML = trendSvg(sh.q, sh.s, scoreTip, r.score) +
-    `<div class="trend-cap">점 = 그 분기 말 주가와 최근 4분기 실적으로 다시 매긴 점수 · 점선 끝 = 오늘 주가로 매긴 지금 점수</div>`;
+  const combo = r.px ? priceScoreSvg(r) : "";
+  box.innerHTML = combo
+    ? combo + '<div class="trend-cap">선 = 주가(주간 종가) · 동그라미 숫자 = 그 분기 말 비교 점수(0~100) · <b style="color:var(--accent)">채운 동그라미</b> = 지금 점수 · 누르면 자세히</div>'
+    : trendSvg(sh.q, sh.s, scoreTip, r.score) + '<div class="trend-cap">점 = 그 분기 말 주가와 최근 4분기 실적으로 다시 매긴 점수 · 점선 끝 = 오늘 주가로 매긴 지금 점수</div>';
+  if (combo) document.querySelector(".trend-h b").textContent = "주가와 비교 점수";
   const fmtV = (k, v) => v == null ? "–" : k === "pe" ? v.toFixed(1) : pct(v, k !== "opM");
   document.querySelectorAll(".why-row.tap").forEach((row) => {
     const k = row.dataset.m, m = METRICS.find((x) => x.k === k), box = row.querySelector(".why-chart");
