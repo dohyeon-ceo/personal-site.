@@ -30,7 +30,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 # SEC는 User-Agent에 연락처를 요구한다. GitHub Actions 시크릿/변수로 바꿀 수 있다.
 SEC_UA = os.environ.get("SEC_USER_AGENT", "PersonalStockDashboard contact@example.com")
@@ -56,7 +56,8 @@ INDEX_SOURCES = {
     ]},
 }
 FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
-CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range=1y&interval=1wk&events=split"
+# 3년치 주간 종가: 최근 1년은 스파크라인, 그 이전은 분기별 점수 추이(그때 PER) 계산에 쓴다
+CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range=3y&interval=1wk&events=split"
 
 # 항목별 XBRL 태그 후보 (회사마다, 연도마다 쓰는 태그가 다르다)
 CONCEPTS = {
@@ -477,6 +478,8 @@ def build_financials(facts: dict) -> dict:
     qn = {e: v for e, (s, v) in ni[4].items()}
     qs = sorted(set(qr) | set(qn))[-12:]
     out["quarterly"] = {"end": qs, "rev": [qr.get(q) for q in qs], "ni": [qn.get(q) for q in qs]}
+    # 점수 추이 계산용 (data.json에는 넣지 않음)
+    out["_q"] = {"rev": rev[4], "ni": ni[4], "op": op[4], "eps": eps[4]}
     return out
 
 
@@ -486,17 +489,150 @@ def fetch_price(ticker: str) -> dict:
     data = json.loads(http_get(CHART_URL.format(sym=sym), APP_UA))
     res = data["chart"]["result"][0]
     meta = res["meta"]
-    closes = [c for c in res["indicators"]["quote"][0].get("close", []) if c is not None]
+    raw = res["indicators"]["quote"][0].get("close", [])
+    hist = [(datetime.fromtimestamp(ts, timezone.utc).date(), c) for ts, c in zip(res.get("timestamp", []), raw) if c is not None]
+    closes = [c for _, c in hist]
+    year = closes[-53:]  # 최근 1년(주간 53개)
     price = meta.get("regularMarketPrice") or (closes[-1] if closes else None)
     return {
         "price": price,
-        "chg1y": (price / closes[0] - 1) if price and closes and closes[0] else None,
+        "chg1y": (price / year[0] - 1) if price and year and year[0] else None,
         "hi52": meta.get("fiftyTwoWeekHigh"),
-        "spark": [round(c, 2) for c in closes],
+        "spark": [round(c, 2) for c in year],
+        "hist": hist,
         # 최근 1년 주식분할: [(날짜, 비율)] — 공시 이후 분할이면 EPS를 보정한다
         "splits": [(datetime.fromtimestamp(v["date"], timezone.utc).date().isoformat(), v["numerator"] / v["denominator"])
                    for v in (res.get("events") or {}).get("splits", {}).values() if v.get("denominator")],
     }
+
+
+# ---------------------------------------------------------------- 점수 추이 (분기별)
+# 화면(index.html prepare)과 같은 방식으로 과거 분기마다 비교 점수를 다시 계산한다.
+#   - 분기 말 시점의 최근 4분기 합(TTM) 실적과 그 분기 말 주가를 쓴다
+#   - 회사마다 결산 분기가 달라서, 분기 말 날짜를 가장 가까운 달력 분기(3·6·9·12월 말)에 맞춘다
+#   - 같은 업종 그룹(세부분야 5개 이상이면 세부분야, 아니면 섹터) 안에서 순위 → 0~100점 → 평균
+HIST_QUARTERS = 8
+METRIC_DIR = {"pe": -1, "revG": 1, "epsG": 1, "opM": 1}  # PER은 낮을수록, 나머지는 높을수록 1위
+
+
+def cal_quarter(e: str) -> str:
+    dt = d(e)
+    cands = [date(dt.year - 1, 12, 31)] + [date(dt.year, m, dd) for m, dd in ((3, 31), (6, 30), (9, 30), (12, 31))]
+    q = min(cands, key=lambda x: abs((x - dt).days))
+    return f"{q.year}Q{(q.month - 1) // 3 + 1}"
+
+
+def ttm_by_end(quarters: dict) -> dict:
+    """{분기말: 그 분기까지 연속 4분기 합}"""
+    ends = sorted(quarters)
+    out = {}
+    for i in range(3, len(ends)):
+        sel = ends[i - 3: i + 1]
+        if not 350 <= (d(sel[-1]) - d(quarters[sel[0]][0])).days <= 380:
+            continue
+        if any(abs((d(quarters[b][0]) - d(a)).days) > 10 for a, b in zip(sel, sel[1:])):
+            continue
+        out[sel[-1]] = sum(quarters[e][1] for e in sel)
+    return out
+
+
+def year_before(series: dict, e: str):
+    """1년 전(±25일) 분기의 값"""
+    target = d(e).toordinal() - 365
+    best = min(series, key=lambda x: abs(d(x).toordinal() - target), default=None)
+    if best is None or abs(d(best).toordinal() - target) > 25:
+        return None
+    return series[best]
+
+
+def price_at(hist: list, e: str):
+    """분기 말 직전(최대 10일 전)의 주간 종가"""
+    dt = d(e)
+    cand = [c for day, c in hist if day <= dt + timedelta(days=3) and (dt - day).days <= 10]
+    return cand[-1] if cand else None
+
+
+def add_score_history(rows: list, fin_by_t: dict, prices: dict) -> None:
+    # 1) 회사별 · 달력 분기별 지표 값
+    vals = {}  # t -> {cq: {pe, revG, epsG, opM, loss}}
+    for r in rows:
+        q = (fin_by_t.get(r["t"]) or {}).get("_q")
+        if not q:
+            continue
+        tr, tn, to, te = (ttm_by_end(q[k]) for k in ("rev", "ni", "op", "eps"))
+        hist = (prices.get(r["t"]) or {}).get("hist") or []
+        # 지금 주식 수(분할 반영) = 시가총액 / 주가 → 과거 주가(분할 조정됨)와 단위가 맞는다
+        shares_now = r["mcap"] / r["price"] if r.get("mcap") and r.get("price") else None
+        per_q = {}
+        for e in sorted(tr)[-HIST_QUARTERS:]:
+            rev, ni = tr.get(e), tn.get(e)
+            v = {"loss": ni is not None and ni < 0}
+            prev_rev = year_before(tr, e)
+            v["revG"] = (rev - prev_rev) / prev_rev if rev is not None and prev_rev and prev_rev > 0 else None
+            v["opM"] = to[e] / rev if e in to and rev else None
+            niG = None
+            prev_ni = year_before(tn, e)
+            if ni is not None and prev_ni and prev_ni > 0:
+                niG = (ni - prev_ni) / prev_ni
+            epsG = None
+            if e in te:
+                prev_eps = year_before(te, e)
+                if prev_eps and prev_eps > 0:
+                    epsG = (te[e] - prev_eps) / prev_eps
+            # 주식분할 등으로 EPS 비교가 어긋나면 순이익 성장으로 대신
+            if epsG is not None and niG is not None and not 0.5 <= (1 + epsG) / max(1e-9, 1 + niG) <= 2:
+                epsG = niG
+            v["epsG"] = epsG if epsG is not None else niG
+            px = price_at(hist, e)
+            v["pe"] = px * shares_now / ni if px and shares_now and ni and ni > 0 else None
+            if v["pe"] is not None and not 0 < v["pe"] < 2000:
+                v["pe"] = None
+            per_q[cal_quarter(e)] = v
+        vals[r["t"]] = per_q
+
+    # 2) 업종 그룹 (화면과 같은 규칙)
+    sub_n = {}
+    for r in rows:
+        sub_n[r["sub"]] = sub_n.get(r["sub"], 0) + 1
+    groups = {}
+    for r in rows:
+        groups.setdefault(r["sub"] if sub_n[r["sub"]] >= 5 else r["s"], []).append(r["t"])
+
+    # 3) 그룹 · 분기마다 순위 → 점수
+    pts = {}  # (t, cq) -> {metric: 0~100}
+    for members in groups.values():
+        qs = {cq for t in members for cq in vals.get(t, {})}
+        for cq in qs:
+            have = [t for t in members if cq in vals.get(t, {})]
+            for m, sign in METRIC_DIR.items():
+                xs = sorted((t for t in have if vals[t][cq][m] is not None), key=lambda t: vals[t][cq][m] * -sign)
+                n = len(xs)
+                for i, t in enumerate(xs):
+                    pts.setdefault((t, cq), {})[m] = round((1 - i / (n - 1) if n > 1 else 0.5) * 100)
+                if m == "pe":
+                    for t in have:
+                        if vals[t][cq]["pe"] is None and vals[t][cq]["loss"]:
+                            pts.setdefault((t, cq), {})["pe"] = 0
+
+    # 4) 회사별로 정리해서 data.json에 넣는다
+    all_q = sorted({cq for v in vals.values() for cq in v})[-HIST_QUARTERS:]
+    for r in rows:
+        v = vals.get(r["t"])
+        if not v:
+            continue
+        qs = [cq for cq in all_q if cq in v]
+        if not qs:
+            continue
+        sh = {"q": qs, "s": [], "p": {m: [] for m in METRIC_DIR}, "v": {m: [] for m in METRIC_DIR}}
+        for cq in qs:
+            p = pts.get((r["t"], cq), {})
+            sc = [p[m] for m in METRIC_DIR if m in p]
+            sh["s"].append(round(sum(sc) / len(sc)) if len(sc) >= 2 else None)
+            for m in METRIC_DIR:
+                sh["p"][m].append(p.get(m))
+                sh["v"][m].append(rnd(v[cq][m], 4) if v[cq][m] is not None else None)
+        if any(x is not None for x in sh["s"]):
+            r["sh"] = sh
 
 
 # ---------------------------------------------------------------- 조립
@@ -553,6 +689,7 @@ def main() -> int:
     print(f"  주가 {len(prices)}/{len(companies)}", flush=True)
 
     rows = []
+    fin_by_t: dict[str, dict] = {}
     for c in companies:
         f = fin.get(c["cik"], {})
         p = prices.get(c["t"], {})
@@ -584,7 +721,9 @@ def main() -> int:
             # 미국 회계기준(us-gaap) 공시가 없는 외국 기업 등: 비교할 숫자가 없으니 넣지 않는다
             print(f"  [추가 제외] {c['t']}: 미국 공시 재무 데이터 없음", flush=True)
             continue
+        fin_by_t[c["t"]] = f
         rows.append({
+            "_cik": c["cik"],
             "t": c["t"], "n": c["n"], "s": c["s"], "sub": c["sub"],
             "ix": [k for k in ("sp", "ndx", "dji") if c["t"] in members.get(k, ())],
             "price": rnd(price, 2), "chg1y": rnd(p.get("chg1y")), "hi52": rnd(p.get("hi52"), 2),
@@ -597,6 +736,10 @@ def main() -> int:
             "annual": f.get("annual"), "quarterly": f.get("quarterly"),
             "spark": p.get("spark"),
         })
+
+    add_score_history(rows, fin_by_t, prices)
+    for r in rows:
+        r.pop("_cik", None)
 
     payload = {
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),

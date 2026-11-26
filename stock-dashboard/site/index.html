@@ -233,6 +233,18 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; font-siz
 .why-bar { height: 6px; border-radius: 3px; background: var(--surface-2); margin: 6px 0 4px; overflow: hidden; }
 .why-bar div { height: 100%; background: var(--accent); border-radius: 3px; }
 .why-how { font-size: 12px; color: var(--text-3); }
+.why-row.tap { cursor: pointer; }
+.why-tog { margin-left: 8px; font-size: 12px; color: var(--accent); font-weight: 600; white-space: nowrap; align-self: center; }
+.why-chart { margin-top: 8px; padding: 8px 0 2px; border-top: 1px dashed var(--border); }
+.trend { padding: 12px 0 10px; border-bottom: 1px solid var(--border); }
+.trend-h { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.trend-h .muted { font-size: 12px; }
+.trend-svg { width: 100%; height: auto; display: block; margin-top: 4px; overflow: visible; }
+.trend-svg text { fill: var(--text-3); font-size: 10.5px; }
+.trend-svg .tv { fill: var(--text); font-size: 12px; font-weight: 700; }
+.trend-cap { font-size: 11.5px; color: var(--text-3); margin-top: 2px; line-height: 1.5; }
+.trend-vals { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--text-2); margin-top: 4px; }
+.trend-vals i { font-style: normal; color: var(--text-3); margin-right: 4px; }
 .why-sum { font-size: 13px; padding-top: 10px; line-height: 1.6; }
 .viewswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin: 12px 0 8px; background: var(--surface-2); border-radius: 12px; }
 .viewswitch a { text-align: center; padding: 10px 0; border-radius: 9px; text-decoration: none; color: var(--text-2); font-weight: 600; font-size: 15px; }
@@ -294,6 +306,7 @@ footer .modebtn { display: inline-block; margin-bottom: 10px; padding: 8px 16px;
       <dt>PER</dt><dd>주가 ÷ 최근 12개월 주당순이익(EPS). 낮을수록 이익 대비 싸다는 뜻. 적자면 계산하지 않음.</dd>
       <dt>매출·EPS 성장</dt><dd>최근 12개월(TTM)을 1년 전 12개월과 비교한 증가율.</dd>
       <dt>영업이익률</dt><dd>영업이익 ÷ 매출. 본업으로 얼마나 남기는지.</dd>
+      <dt>점수 추이</dt><dd>기업을 누르면 나오는 분기별 그래프. 각 분기 말의 주가와 그때까지 최근 4분기 실적으로, 그 분기의 같은 업종 기업들 사이에서 점수를 다시 매긴 값이에요. 점수 근거의 항목(PER 등)을 누르면 항목별 추이도 볼 수 있어요.</dd>
       <dt>기회 지도</dt><dd>가로축 PER, 세로축 성장률. 점선은 업종 중앙값. <b>왼쪽 위(초록 영역)</b>가 "업종보다 싸면서 더 빨리 크는" 기업.</dd>
     </dl>
   </details>
@@ -806,17 +819,95 @@ function scoreWhy(r, myPos) {
     strong.length ? `<span class="up">강점</span> ${strong.map((x) => `${x.m.label}(${x.sc}점)`).join(", ")}` : "",
     weak.length ? `<span class="down">약점</span> ${weak.map((x) => `${x.m.label}(${x.sc}점)`).join(", ")}` : "",
   ].filter(Boolean).join("<br>");
+  const hasH = !!r.sh;
   return `<div class="box why">
-    ${rows.map(({ m, sc, how }) => `<div class="why-row">
-      <div class="why-top"><b>${m.label}</b> <span class="num">${m.fmt(r)}</span><span class="why-sc num">${sc == null ? "–" : sc + "점"}</span></div>
+    <div class="trend">
+      <div class="trend-h"><b>비교 점수 추이</b><span class="muted">분기 말 기준${hasH ? "" : " · 아직 데이터 없음"}</span></div>
+      <div id="trendScore">${hasH ? "" : `<p class="muted" style="font-size:12.5px;margin:6px 0 4px">다음 자동 업데이트부터 분기별 점수가 쌓여요.</p>`}</div>
+    </div>
+    ${rows.map(({ m, sc, how }) => `<div class="why-row${hasH ? " tap" : ""}" data-m="${m.k}" ${hasH ? `role="button" tabindex="0" aria-expanded="false"` : ""}>
+      <div class="why-top"><b>${m.label}</b> <span class="num">${m.fmt(r)}</span><span class="why-sc num">${sc == null ? "–" : sc + "점"}</span>${hasH ? `<span class="why-tog" aria-hidden="true">추이 ▾</span>` : ""}</div>
       <div class="why-bar"><div style="width:${sc ?? 0}%"></div></div>
-      <div class="why-how">${how}</div></div>`).join("")}
+      <div class="why-how">${how}</div>
+      <div class="why-chart" hidden></div></div>`).join("")}
     <div class="why-sum">
       <div class="num">비교 점수 = 항목 점수의 평균 · ${formula}</div>
       ${summary ? `<div style="margin-top:6px">${summary}</div>` : ""}
       <div class="muted" style="margin-top:6px">항목 점수 = 같은 업종 안에서의 위치를 0~100점으로 바꾼 값 (1위 100점, 꼴찌 0점).
         비교 대상: ${esc(r.grpLabel)} ${r.grpN}개${r.grpWhy ? ` — ${esc(r.grpWhy)}` : ""} 이 안에서 점수 ${myPos}위.</div>
     </div></div>`;
+}
+
+// ---------------- 점수 추이 차트 (0~100점, 분기별 선) ----------------
+// 분기 라벨 "2026Q3" → 짧게 '26 3Q, 길게 2026년 3분기 말
+const qShort = (q) => `'${q.slice(2, 4)} ${q.slice(5)}Q`;
+const qLong = (q) => `${q.slice(0, 4)}년 ${q.slice(5)}분기 말`;
+function trendSvg(qs, vals, tipOf, now) {
+  const W = PC ? 520 : 360, H = 150, L = 30, R = 40, T = 14, B = 22;
+  const labels = qs.map(qShort).concat(now != null ? ["지금"] : []);
+  const ys = vals.concat(now != null ? [now] : []);
+  const n = labels.length, slot = (W - L - R) / Math.max(1, n - 1);
+  const X = (i) => L + slot * i, Y = (v) => T + (1 - v / 100) * (H - T - B);
+  let g = "";
+  for (const t of [0, 50, 100]) {
+    g += `<line x1="${L}" x2="${W - R + 8}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--grid)" ${t === 50 ? 'stroke-dasharray="3 3"' : ""}/>`;
+    g += `<text x="${L - 6}" y="${Y(t) + 3.5}" text-anchor="end">${t}</text>`;
+  }
+  const step = Math.ceil(n / 5);
+  labels.forEach((lb, i) => { if ((n - 1 - i) % step === 0) g += `<text x="${X(i)}" y="${H - 5}" text-anchor="middle">${lb}</text>`; });
+  // 분기 선 (값 없는 분기에서 끊김)
+  let d = "", pen = false;
+  vals.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? "L" : "M"}${X(i)},${Y(v)}`; pen = true; });
+  g += `<path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+  // 마지막 분기 → 지금 (점선: 오늘 주가로 다시 계산한 값)
+  const lastI = vals.map((v, i) => v == null ? -1 : i).filter((i) => i >= 0).pop();
+  if (now != null && lastI != null) g += `<path d="M${X(lastI)},${Y(vals[lastI])}L${X(n - 1)},${Y(now)}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 4"/>`;
+  ys.forEach((v, i) => {
+    if (v == null) return;
+    const isNow = now != null && i === n - 1;
+    g += `<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="${isNow ? "var(--surface)" : "var(--accent)"}" stroke="var(--accent)" stroke-width="2"/>`;
+  });
+  // 값 표시: 마지막 점만 (지금 또는 마지막 분기)
+  const li = now != null ? n - 1 : lastI;
+  if (li != null) g += `<text class="tv" x="${X(li) + 8}" y="${Y(ys[li]) + 4}">${ys[li]}</text>`;
+  // 손가락으로 누르기 쉬운 넓은 영역
+  labels.forEach((lb, i) => {
+    g += `<rect x="${X(i) - slot / 2}" y="${T - 8}" width="${slot}" height="${H - T - B + 16}" fill="transparent" data-tip="${esc(tipOf(i, now != null && i === n - 1))}"/>`;
+  });
+  return `<svg class="trend-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="분기별 점수 추이">${g}</svg>`;
+}
+function bindWhy(r) {
+  if (!r.sh) return;
+  const sh = r.sh;
+  const scoreTip = (i, isNow) => isNow ? `지금 (오늘 주가 기준)<br><b>비교 점수 ${r.score ?? "–"}점</b>`
+    : `${qLong(sh.q[i])}<br><b>비교 점수 ${sh.s[i] ?? "없음"}${sh.s[i] == null ? "" : "점"}</b>`;
+  const box = $("#trendScore");
+  box.innerHTML = trendSvg(sh.q, sh.s, scoreTip, r.score) +
+    `<div class="trend-cap">점 = 그 분기 말 주가와 최근 4분기 실적으로 다시 매긴 점수 · 점선 끝 = 오늘 주가로 매긴 지금 점수</div>`;
+  const fmtV = (k, v) => v == null ? "–" : k === "pe" ? v.toFixed(1) : pct(v, k !== "opM");
+  document.querySelectorAll(".why-row.tap").forEach((row) => {
+    const k = row.dataset.m, m = METRICS.find((x) => x.k === k), box = row.querySelector(".why-chart");
+    const toggle = () => {
+      const open = box.hidden;
+      box.hidden = !open;
+      row.setAttribute("aria-expanded", open);
+      row.querySelector(".why-tog").textContent = open ? "닫기 ▴" : "추이 ▾";
+      if (open && !box.innerHTML) {
+        const tip = (i, isNow) => isNow ? `지금<br><b>${m.label} ${m.fmt(r)} → ${r.pts?.[k] ?? "–"}점</b>`
+          : `${qLong(sh.q[i])}<br><b>${m.label} ${fmtV(k, sh.v[k][i])} → ${sh.p[k][i] ?? "–"}${sh.p[k][i] == null ? "" : "점"}</b>`;
+        const vals = sh.q.map((q, i) => `<span><i>${qShort(q)}</i>${fmtV(k, sh.v[k][i])}</span>`).join("");
+        box.innerHTML = trendSvg(sh.q, sh.p[k], tip, r.pts?.[k] ?? null) +
+          `<div class="trend-vals num">${vals}<span><i>지금</i>${m.fmt(r)}</span></div>`;
+      }
+    };
+    row.onclick = (e) => { if (!e.target.closest("svg")) toggle(); };
+    row.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
+  });
+  // 차트 툴팁 (마우스·손가락)
+  const why = document.querySelector(".why");
+  why.onmousemove = (e) => { const t = e.target.dataset?.tip; t ? showTip(e, t) : hideTip(); };
+  why.onmouseleave = hideTip;
+  why.ontouchstart = (e) => { const t = e.target.dataset?.tip; if (t) showTip(e.touches[0], t); };
 }
 
 // ---------------- 기업 상세 ----------------
@@ -881,6 +972,7 @@ function pageCompany(r) {
     renderCharts(r);
   });
   renderCharts(r);
+  bindWhy(r);
   scrollTo(0, 0);
 }
 
