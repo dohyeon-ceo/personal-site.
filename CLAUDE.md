@@ -20,6 +20,8 @@
 - `youtube-script/index.html` 화면. 개인용 (`noindex`). 사용자가 "출시"를 말하기 전까지 홍보·공개 목적의 작업은 하지 않는다.
 - 자막은 두 경로로 가져온다: ① 자막 서버 `api/transcript.js` (Vercel 서버리스 함수, 이 저장소를 Vercel에 연결하면 배포됨) ② 공개 Invidious 미러 (CORS 허용, 불안정). GitHub Pages는 정적 호스팅이라 ①은 Vercel에서만 돈다.
 - Vercel 주소가 생기면 화면의 `API_SERVER` 상수에 넣는다. Vercel 주소에서 열면 같은 서버를 바로 쓴다.
+- **실패해도 "안 돼요"로 끝내지 않는다.** 오류는 종류별(주소 오류·자막 없음·막힘) 친절한 안내와 다음 행동 버튼으로 보여준다. 대안: ① 다시 시도 ② 유튜브 「스크립트 표시」에서 복사 → 📋 직접 붙여넣기 탭에서 정리(`parseTranscriptText`) ③ PC용 북마크 버튼(`ytScriptBookmarklet`, 유튜브 페이지에서 실행).
+- 북마크 버튼 코드는 함수 소스를 그대로 `javascript:` 주소로 만든다. 두 함수는 바깥 변수를 쓰면 안 되고, 유튜브는 Trusted Types로 `innerHTML`을 막으므로 DOM을 직접 만든다.
 - 이 작업 환경에서는 유튜브·미러 접속이 막혀 있어 실제 영상 테스트는 사용자 휴대폰에서 해야 한다.
 
 ## 법적 주의 (stock-dashboard)

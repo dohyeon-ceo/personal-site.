@@ -6,30 +6,47 @@
 <meta name="robots" content="noindex" />
 <title>유튜브 스크립트 추출기</title>
 <style>
-  :root { color-scheme: light dark; --bg: #f4f4f2; --card: #fcfcfb; --border: #e3e2de; --text: #0b0b0b; --sub: #85847f; --btn2: #e8e7e3; --accent: #e60023; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #111110; --card: #1a1a19; --border: #31312e; --text: #f0efec; --sub: #8d8c85; --btn2: #2a2a28; } }
+  :root { color-scheme: light dark; --bg: #f4f4f2; --card: #fcfcfb; --border: #e3e2de; --text: #0b0b0b; --sub: #85847f; --btn2: #e8e7e3; --accent: #e60023; --soft: #fff4e5; --softb: #f3d9b1; --ok: #1a7f37; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111110; --card: #1a1a19; --border: #31312e; --text: #f0efec; --sub: #8d8c85; --btn2: #2a2a28; --soft: #2a2218; --softb: #5a4526; --ok: #4ac26b; } }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
   main { max-width: 560px; margin: 0 auto; padding: 24px 16px 32px; }
   body.pc main { max-width: 960px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
-  p.sub { margin: 0 0 16px; color: var(--sub); font-size: 13px; }
+  h3 { font-size: 15px; margin: 0 0 6px; }
+  p.sub { margin: 0 0 14px; color: var(--sub); font-size: 13px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tabs button { flex: 1; padding: 9px 6px; font-size: 14px; background: var(--btn2); color: var(--text); }
+  .tabs button.on { background: var(--text); color: var(--bg); }
   form { display: flex; gap: 8px; }
   input[type=text] { flex: 1; min-width: 0; padding: 12px; font-size: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: inherit; }
-  button { padding: 12px 14px; font-size: 15px; font-weight: 600; border: 0; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap; }
+  button, a.btn { display: inline-block; padding: 12px 14px; font-size: 15px; font-weight: 600; border: 0; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap; text-decoration: none; font-family: inherit; }
   button:disabled { opacity: .5; cursor: default; }
-  button.secondary { background: var(--btn2); color: var(--text); }
+  .secondary { background: var(--btn2) !important; color: var(--text) !important; }
+  .small { padding: 8px 11px; font-size: 14px; }
   .options { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 14px; margin-bottom: 10px; }
   select { padding: 6px 8px; font-size: 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: inherit; max-width: 200px; }
   label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
-  textarea { width: 100%; height: 50vh; padding: 12px; font: 15px/1.6 inherit; font-family: inherit; border: 1px solid var(--border); border-radius: 10px; resize: vertical; background: var(--bg); color: inherit; }
+  textarea { width: 100%; padding: 12px; font-size: 15px; line-height: 1.6; font-family: inherit; border: 1px solid var(--border); border-radius: 10px; resize: vertical; background: var(--bg); color: inherit; }
+  #out { height: 50vh; }
+  #pasteIn { height: 30vh; }
   .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
   .meta { font-size: 13px; color: var(--sub); margin-left: auto; }
   .title { font-weight: 600; margin: 0 0 10px; }
-  .error { color: #d33; font-size: 14px; margin-top: 10px; white-space: pre-line; }
   .status { color: var(--sub); font-size: 13px; margin-top: 8px; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
+  .notice { background: var(--soft); border: 1px solid var(--softb); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .notice .head { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  .notice p { margin: 0 0 8px; font-size: 14px; }
+  .way { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .way:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+  .way ol { margin: 4px 0 8px; padding-left: 20px; font-size: 14px; }
+  .way li { margin-bottom: 3px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--btn2); color: var(--sub); margin-left: 4px; vertical-align: 1px; }
+  .ex { font-size: 13px; color: var(--sub); background: var(--bg); border-radius: 8px; padding: 8px 10px; margin: 6px 0; word-break: break-all; }
+  a.bm { background: #2563eb; cursor: grab; }
+  .ok { color: var(--ok); font-weight: 600; font-size: 14px; }
   footer { text-align: center; font-size: 13px; color: var(--sub); }
   footer a { color: inherit; }
 </style>
@@ -37,21 +54,82 @@
 <body>
 <main>
   <h1>📝 유튜브 스크립트 추출기</h1>
-  <p class="sub">유튜브 주소를 붙여넣으면 자막을 텍스트로 정리해 줘요. 복사해서 Claude에 바로 붙여넣으세요.</p>
+  <p class="sub">유튜브 영상의 자막을 텍스트로 정리해서 Claude에 바로 붙여넣을 수 있게 해 줘요.</p>
 
-  <div class="card">
+  <div class="tabs">
+    <button type="button" data-tab="url" class="on">🔗 주소로 가져오기</button>
+    <button type="button" data-tab="paste">📋 직접 붙여넣기</button>
+    <button type="button" data-tab="help">❓ 다른 방법</button>
+  </div>
+
+  <!-- 1. 주소로 가져오기 -->
+  <div id="tab-url" class="card">
     <form id="form">
       <input id="url" type="text" placeholder="유튜브 주소 붙여넣기" autocomplete="off" />
       <button id="go" type="submit">가져오기</button>
     </form>
     <div id="status" class="status hidden"></div>
-    <div id="error" class="error hidden"></div>
   </div>
 
+  <!-- 2. 직접 붙여넣기 -->
+  <div id="tab-paste" class="card hidden">
+    <h3>유튜브에서 복사한 스크립트를 붙여넣으세요</h3>
+    <p class="sub" style="margin-bottom:8px">시간 표시(0:00)·중복 줄을 지우고 읽기 좋게 문단으로 정리해 드려요. 복사하는 방법은 <a href="#" data-goto="help">❓ 다른 방법</a>에 있어요.</p>
+    <input id="pasteTitle" type="text" placeholder="영상 제목 (선택)" style="width:100%;margin-bottom:8px" />
+    <textarea id="pasteIn" placeholder="0:00&#10;안녕하세요&#10;0:03&#10;오늘은 ...&#10;&#10;이런 내용을 그대로 붙여넣으면 돼요"></textarea>
+    <div class="row"><button id="cleanBtn" type="button">✨ 정리하기</button></div>
+  </div>
+
+  <!-- 3. 안내 (실패했을 때 / 다른 방법 탭) -->
+  <div id="notice" class="notice hidden"></div>
+
+  <div id="tab-help" class="card hidden">
+    <div class="way">
+      <h3>① 다시 시도하기 <span class="tag">가장 쉬움</span></h3>
+      <p class="sub" style="margin:0 0 6px">자동으로 가져오는 길은 무료 중계 서버를 써서, 잠깐 막혔다가 다시 되는 경우가 많아요. 1~2분 뒤에 한 번 더 눌러 보세요.</p>
+      <button type="button" class="small" data-action="retry">🔄 다시 시도</button>
+    </div>
+
+    <div class="way">
+      <h3>② 유튜브에서 직접 복사 → 여기에 붙여넣기 <span class="tag">PC 추천</span></h3>
+      <ol>
+        <li>PC 브라우저(크롬 등)에서 유튜브 영상을 열어요. <span id="openYt"></span></li>
+        <li>영상 아래 <b>설명란</b>을 눌러 펼치고, 맨 아래 <b>「스크립트 표시」</b>를 눌러요.</li>
+        <li>오른쪽에 뜬 스크립트 목록의 첫 줄부터 끝 줄까지 마우스로 끌어서 선택하고 <b>Ctrl+C</b>(맥은 ⌘+C)로 복사해요.</li>
+        <li>여기 <a href="#" data-goto="paste">📋 직접 붙여넣기</a> 탭에 붙여넣고 <b>정리하기</b>를 누르면 끝!</li>
+      </ol>
+      <p class="sub" style="margin:0">휴대폰: 유튜브 <b>앱</b>에서는 스크립트 글자를 복사할 수 없어요. 크롬/사파리에서 유튜브를 열고 메뉴의 <b>「데스크톱 사이트」</b>로 바꾸면 PC와 같은 방법을 쓸 수 있어요 (기기에 따라 안 될 수 있어요).</p>
+    </div>
+
+    <div class="way">
+      <h3>③ 원클릭 북마크 버튼 <span class="tag">PC · 한 번 설정하면 계속 편함</span></h3>
+      <ol>
+        <li>아래 파란 버튼을 브라우저 <b>북마크바로 끌어다 놓아요</b>. (북마크바가 안 보이면 Ctrl+Shift+B)</li>
+        <li>유튜브 영상 페이지에서 그 북마크를 누르면, 스크립트를 자동으로 열어서 정리된 텍스트 창을 띄워 줘요.</li>
+        <li>창의 <b>복사</b> 버튼을 누르고 Claude에 붙여넣으면 끝!</li>
+      </ol>
+      <div class="row" style="margin-top:4px">
+        <a id="bookmarklet" class="btn bm small" href="#">📝 스크립트 복사</a>
+        <button type="button" class="small secondary" data-action="copyBm">북마크 코드 복사</button>
+        <span id="bmMsg" class="ok"></span>
+      </div>
+      <p class="sub" style="margin:8px 0 0">끌어다 놓기가 안 되면: 아무 페이지나 북마크로 저장한 뒤, 북마크 편집에서 주소(URL) 칸에 「북마크 코드 복사」로 복사한 내용을 붙여넣어요.</p>
+    </div>
+
+    <div class="way">
+      <h3>④ 그래도 안 되면</h3>
+      <ul style="margin:4px 0 0;padding-left:20px;font-size:14px">
+        <li>설명란에 <b>「스크립트 표시」</b>가 아예 없다면, 그 영상은 자막이 없는 영상이에요. 이 경우는 어떤 방법으로도 글자로 뽑을 수 없어요.</li>
+        <li>영상이 <b>비공개·연령 제한·회원 전용</b>이면 자동으로는 못 가져와요. ②·③ 방법(내 브라우저에서 직접)은 될 수 있어요.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 결과 -->
   <div id="result" class="card hidden">
     <p id="title" class="title"></p>
     <div class="options">
-      <label>언어 <select id="lang"></select></label>
+      <label id="langWrap">언어 <select id="lang"></select></label>
       <label><input type="checkbox" id="ts" /> 타임스탬프</label>
       <label><input type="checkbox" id="prefix" checked /> 제목·안내문</label>
     </div>
@@ -77,6 +155,11 @@ const MIRRORS = ['https://inv.nadeko.net', 'https://yewtu.be', 'https://invidiou
 const $ = (id) => document.getElementById(id);
 let data = null;
 
+// 오류 종류: 화면 안내를 고르는 데 쓴다
+class FriendlyError extends Error {
+  constructor(kind, detail) { super(kind); this.kind = kind; this.detail = detail || ''; }
+}
+
 function extractVideoId(input) {
   const s = String(input || '').trim();
   if (/^[\w-]{11}$/.test(s)) return s;
@@ -93,6 +176,91 @@ function extractVideoId(input) {
   return null;
 }
 
+// 유튜브 "스크립트 표시"에서 복사한 글 → [{start, text}]
+// (북마크 버튼 안에서도 그대로 쓰이므로 이 함수 밖의 것을 참조하면 안 된다)
+function parseTranscriptText(raw) {
+  const lead = /^\[?((?:\d{1,2}:)?\d{1,2}:\d{2})\]?(?:\s+|$)(.*)$/;
+  const junk = /^((\d+\s*(시간|분|초)\s*)+|(\d+\s*(hours?|minutes?|seconds?),?\s*)+|스크립트|transcript|타임스탬프 전환|toggle timestamps|동영상 검색|search in video|search transcript|한국어|english|chapters?|챕터)$/i;
+  const toSec = (t) => t.split(':').reduce((a, b) => a * 60 + Number(b), 0);
+  const segs = [];
+  let cur = null, last = '';
+  for (let line of String(raw).replace(/\r/g, '').split('\n')) {
+    line = line.replace(/\s+/g, ' ').trim();
+    if (!line || junk.test(line)) continue;
+    const m = line.match(lead);
+    if (m) { cur = toSec(m[1]); line = m[2].trim(); if (!line) continue; }
+    if (line === last) continue;
+    segs.push({ start: cur, text: line });
+    last = line;
+  }
+  return segs;
+}
+
+// ── 북마크 버튼: 유튜브 영상 페이지에서 실행된다 ──
+async function ytScriptBookmarklet(parse) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  if (!/youtube\.com$/.test(location.hostname) || !/[?&]v=|\/shorts\/|\/live\//.test(location.href)) {
+    alert('유튜브 영상 페이지에서 눌러 주세요 🙂'); return;
+  }
+  const segSel = 'ytd-transcript-segment-renderer, transcript-segment-view-model';
+  const panelSel = 'ytd-engagement-panel-section-list-renderer[target-id*="transcript"]';
+  const btnSel = 'ytd-video-description-transcript-section-renderer button';
+  if (!document.querySelector(segSel)) {
+    let btn = document.querySelector(btnSel);
+    if (!btn) {
+      const more = document.querySelector('#description-inline-expander #expand, #expand');
+      if (more) { more.click(); await sleep(700); }
+      btn = document.querySelector(btnSel);
+    }
+    if (!btn) {
+      alert('스크립트 버튼을 찾지 못했어요.\n\n· 설명란 맨 아래 「스크립트 표시」를 직접 누른 뒤 이 북마크를 다시 눌러 보세요.\n· 「스크립트 표시」가 없다면 자막이 없는 영상이에요.');
+      return;
+    }
+    btn.click();
+    for (let i = 0; i < 30 && !document.querySelector(segSel); i++) await sleep(300);
+  }
+  const segEls = document.querySelectorAll(segSel);
+  const panel = document.querySelector(panelSel);
+  const raw = segEls.length ? [...segEls].map((s) => s.innerText).join('\n') : (panel ? panel.innerText : '');
+  const segs = parse(raw);
+  if (!segs.length) {
+    alert('스크립트를 읽지 못했어요. 스크립트 창이 열린 상태에서 다시 눌러 주세요.'); return;
+  }
+  let body = '', para = '';
+  for (const s of segs) {
+    para += (para ? ' ' : '') + s.text;
+    if (para.length > 400 && /[.?!。]$/.test(para)) { body += para + '\n\n'; para = ''; }
+  }
+  body += para;
+  const title = document.title.replace(/^\(\d+\)\s*/, '').replace(/ - YouTube$/, '');
+  const text = '다음은 유튜브 영상 "' + title + '"의 스크립트입니다.\n' + location.href + '\n\n' + body.trim();
+
+  document.getElementById('__ytscript')?.remove();
+  const box = document.createElement('div');
+  box.id = '__ytscript';
+  box.style.cssText = 'position:fixed;inset:5% 5% auto auto;width:min(520px,90vw);z-index:99999;background:#fff;color:#111;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.35);padding:16px;font:14px/1.5 sans-serif';
+  // 유튜브는 innerHTML을 막아 두었으므로(Trusted Types) 요소를 하나씩 만든다
+  const el = (tag, css, txt) => { const x = document.createElement(tag); x.style.cssText = css; if (txt) x.textContent = txt; return x; };
+  const head = el('b', 'font-size:16px', '📝 스크립트 (' + text.length.toLocaleString() + '자)');
+  const ta = el('textarea', 'display:block;width:100%;height:50vh;margin:10px 0;padding:10px;font:14px/1.6 sans-serif;border:1px solid #ccc;border-radius:8px;box-sizing:border-box');
+  ta.value = text;
+  const copyBtn = el('button', 'padding:10px 16px;font-weight:700;border:0;border-radius:8px;background:#e60023;color:#fff;cursor:pointer;margin-right:6px', '📋 복사');
+  const closeBtn = el('button', 'padding:10px 16px;border:0;border-radius:8px;background:#eee;color:#111;cursor:pointer', '닫기');
+  closeBtn.onclick = () => box.remove();
+  copyBtn.onclick = async () => {
+    try { await navigator.clipboard.writeText(text); } catch { ta.select(); document.execCommand('copy'); }
+    copyBtn.textContent = '✅ 복사됐어요! Claude에 붙여넣으세요';
+  };
+  box.append(head, ta, copyBtn, closeBtn);
+  document.body.appendChild(box);
+}
+const BOOKMARKLET = 'javascript:' + encodeURIComponent('(' + ytScriptBookmarklet + ')(' + parseTranscriptText + ')');
+$('bookmarklet').href = BOOKMARKLET;
+$('bookmarklet').addEventListener('click', (e) => {
+  e.preventDefault();
+  alert('이 버튼은 여기서 누르는 게 아니라, 북마크바로 끌어다 놓은 뒤 유튜브 영상 페이지에서 눌러요 🙂');
+});
+
 // ── 방법 1: 내 자막 서버 (Vercel) ──
 const ON_SERVER = location.hostname.endsWith('vercel.app') || location.hostname === 'localhost';
 const HAS_SERVER = ON_SERVER || !!API_SERVER;
@@ -102,6 +270,7 @@ async function viaServer(url, lang) {
   if (lang) qs.set('lang', lang);
   const res = await fetch(apiBase() + '/api/transcript?' + qs);
   const json = await res.json();
+  if (res.status === 404) throw new FriendlyError('nocaps');
   if (!res.ok) throw new Error(json.error || '서버 오류');
   return json;
 }
@@ -110,13 +279,13 @@ async function viaServer(url, lang) {
 function parseVtt(vtt) {
   const out = [];
   const toSec = (t) => t.split(':').reduce((a, b) => a * 60 + parseFloat(b), 0);
+  const tmp = document.createElement('textarea');
   let last = '';
   for (const block of vtt.replace(/\r/g, '').split(/\n\n+/)) {
     const lines = block.split('\n');
     const i = lines.findIndex((l) => l.includes('-->'));
     if (i < 0) continue;
     const start = toSec(lines[i].split('-->')[0].trim());
-    const tmp = document.createElement('textarea');
     for (const raw of lines.slice(i + 1)) {
       tmp.innerHTML = raw.replace(/<[^>]+>/g, '');
       const text = tmp.value.replace(/\s+/g, ' ').trim();
@@ -126,7 +295,7 @@ function parseVtt(vtt) {
   }
   return out;
 }
-async function fetchJson(u) {
+async function fetchOk(u) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
   try {
@@ -136,30 +305,28 @@ async function fetchJson(u) {
   } finally { clearTimeout(timer); }
 }
 async function viaMirror(videoId, lang) {
-  let lastErr;
-  for (const base of MIRRORS) {
+  for (const [i, base] of MIRRORS.entries()) {
     try {
-      setStatus(`공개 미러에서 가져오는 중… (${new URL(base).hostname})`);
-      const list = await (await fetchJson(`${base}/api/v1/captions/${videoId}`)).json();
+      setStatus(`자막을 찾는 중… (${i + 1}/${MIRRORS.length}번째 길)`);
+      const list = await (await fetchOk(`${base}/api/v1/captions/${videoId}`)).json();
       const caps = list.captions || [];
-      if (!caps.length) throw new Error('이 영상에는 자막이 없습니다.');
+      if (!caps.length) throw new FriendlyError('nocaps');
       const tracks = caps.map((c) => ({ id: c.label, name: c.label, code: c.languageCode || c.language_code || '', url: c.url }));
       const pick = (lang && tracks.find((t) => t.id === lang)) ||
         tracks.find((t) => t.code.startsWith('ko') && !/auto|자동/i.test(t.name)) ||
         tracks.find((t) => !/auto|자동/i.test(t.name)) || tracks[0];
-      const vtt = await (await fetchJson(base + pick.url)).text();
+      const vtt = await (await fetchOk(base + pick.url)).text();
       const segments = parseVtt(vtt);
-      if (!segments.length) throw new Error('자막 내용이 비어 있습니다.');
+      if (!segments.length) throw new Error('empty');
       let info = {};
-      try { info = await (await fetchJson(`${base}/api/v1/videos/${videoId}?fields=title,author`)).json(); } catch {}
+      try { info = await (await fetchOk(`${base}/api/v1/videos/${videoId}?fields=title,author`)).json(); } catch {}
       return { videoId, title: info.title || '', author: info.author || '', selected: pick.id,
         tracks: tracks.map(({ id, name }) => ({ id, name })), segments, source: 'mirror' };
     } catch (e) {
-      lastErr = e;
-      if (e.message === '이 영상에는 자막이 없습니다.') throw e;
+      if (e.kind === 'nocaps') throw e;
     }
   }
-  throw new Error('공개 미러가 모두 응답하지 않았습니다' + (lastErr ? ` (${lastErr.message || lastErr})` : ''));
+  throw new FriendlyError('blocked');
 }
 
 // ── 텍스트 만들기 ──
@@ -173,14 +340,14 @@ function buildText() {
   if (!data) return '';
   let body;
   if ($('ts').checked) {
-    body = data.segments.map((s) => `[${fmtTime(s.start)}] ${s.text}`).join('\n');
+    body = data.segments.map((s) => (s.start == null ? '' : `[${fmtTime(s.start)}] `) + s.text).join('\n');
   } else {
     // 문장을 이어 붙이고, 8초 이상 끊기거나 400자가 넘은 문장 끝에서 문단을 나눈다
     const paras = [];
     let cur = '';
     data.segments.forEach((s, i) => {
       const prev = data.segments[i - 1];
-      const gap = prev ? s.start - prev.start : 0;
+      const gap = prev && prev.start != null && s.start != null ? s.start - prev.start : 0;
       if (cur && ((cur.length > 400 && /[.?!。]$/.test(cur)) || gap > 8)) { paras.push(cur); cur = ''; }
       cur += (cur ? ' ' : '') + s.text;
     });
@@ -188,8 +355,9 @@ function buildText() {
     body = paras.join('\n\n');
   }
   if ($('prefix').checked) {
-    const t = data.title ? `"${data.title}"${data.author ? ` (${data.author})` : ''}` : '';
-    body = `다음은 유튜브 영상 ${t}의 스크립트입니다.\nhttps://www.youtube.com/watch?v=${data.videoId}\n\n` + body;
+    const t = data.title ? ` "${data.title}"${data.author ? ` (${data.author})` : ''}` : '';
+    const link = data.videoId ? `https://www.youtube.com/watch?v=${data.videoId}\n` : '';
+    body = `다음은 유튜브 영상${t}의 스크립트입니다.\n${link}\n` + body;
   }
   return body;
 }
@@ -198,17 +366,63 @@ function render() {
   $('out').value = text;
   $('meta').textContent = `${text.length.toLocaleString()}자`;
 }
+function showResult(d) {
+  data = d;
+  $('title').textContent = d.title || (d.videoId ? d.videoId : '붙여넣은 스크립트');
+  $('lang').innerHTML = '';
+  for (const t of d.tracks || []) {
+    const o = document.createElement('option');
+    o.value = t.id; o.textContent = t.name; o.selected = t.id === d.selected;
+    $('lang').appendChild(o);
+  }
+  $('langWrap').classList.toggle('hidden', !(d.tracks && d.tracks.length));
+  $('result').classList.remove('hidden');
+  render();
+  $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 function setStatus(msg) {
   $('status').textContent = msg || '';
   $('status').classList.toggle('hidden', !msg);
 }
 
+// ── 안내 (실패해도 다음에 할 일을 보여준다) ──
+function showNotice(kind) {
+  const n = $('notice');
+  const vid = extractVideoId($('url').value);
+  const html = {
+    invalid: `<div class="head">🤔 주소를 알아보지 못했어요</div>
+      <p>유튜브 영상 주소를 통째로 붙여넣어 주세요. 이런 모양이면 다 돼요:</p>
+      <div class="ex">https://www.youtube.com/watch?v=abc123XYZ_0<br>https://youtu.be/abc123XYZ_0<br>https://youtube.com/shorts/abc123XYZ_0</div>
+      <p>📱 유튜브 앱: 영상 아래 <b>공유 → 링크 복사</b>를 누르면 주소가 복사돼요.</p>`,
+    nocaps: `<div class="head">😢 이 영상에는 자막이 없어요</div>
+      <p>만든 사람이 자막을 올리지 않았고, 유튜브 자동 자막도 만들어지지 않은 영상이에요 (음악 위주 영상, 아주 짧은 영상, 막 올라온 영상에서 자주 그래요).</p>
+      <p>막 올라온 영상이라면 몇 시간 뒤에 자동 자막이 생길 수 있어요. 나중에 다시 시도해 보세요.</p>
+      <div class="row"><button type="button" class="small secondary" data-action="retry">🔄 다시 시도</button></div>`,
+    blocked: `<div class="head">🙏 자동으로 가져오지 못했어요. 그래도 방법이 있어요!</div>
+      <p>자막을 대신 받아 오는 무료 중계 서버가 지금 바쁘거나 유튜브에 막혀 있어요. 아래 중에 편한 걸로 해 보세요.</p>
+      <div class="row">
+        <button type="button" class="small" data-action="retry">🔄 다시 시도</button>
+        <button type="button" class="small secondary" data-goto="help">다른 방법 보기 →</button>
+        ${vid ? `<a class="btn small secondary" href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">유튜브에서 열기</a>` : ''}
+      </div>`,
+  }[kind];
+  n.innerHTML = html;
+  n.classList.remove('hidden');
+}
+function hideNotice() { $('notice').classList.add('hidden'); }
+
 async function load(lang) {
   const url = $('url').value.trim();
   if (!url) return;
-  $('error').classList.add('hidden');
+  hideNotice();
   const videoId = extractVideoId(url);
-  if (!videoId) { showError('올바른 유튜브 주소가 아닙니다.'); return; }
+  if (!videoId) {
+    // 주소 대신 스크립트 글을 붙여넣은 경우 → 정리하기로 넘긴다
+    if (url.length > 40) {
+      $('pasteIn').value = url; $('url').value = ''; switchTab('paste'); cleanPasted(); return;
+    }
+    showNotice('invalid'); return;
+  }
   $('go').disabled = true; $('go').textContent = '불러오는 중…';
   try {
     let result;
@@ -217,40 +431,72 @@ async function load(lang) {
     if (!useMirror) {
       setStatus('자막 서버에서 가져오는 중…');
       try { result = await viaServer(url, lang); }
-      catch (e) {
-        if (/자막\(스크립트\)이 없습니다|올바른/.test(e.message)) throw e;
-        result = await viaMirror(videoId, lang);
-      }
+      catch (e) { if (e.kind === 'nocaps') throw e; result = await viaMirror(videoId, lang); }
     } else {
       result = await viaMirror(videoId, lang);
     }
-    data = result;
-    $('title').textContent = data.title || data.videoId;
-    $('lang').innerHTML = '';
-    for (const t of data.tracks) {
-      const o = document.createElement('option');
-      o.value = t.id; o.textContent = t.name; o.selected = t.id === data.selected;
-      $('lang').appendChild(o);
-    }
-    $('result').classList.remove('hidden');
-    render();
+    showResult(result);
   } catch (e) {
-    showError(e.message || String(e));
+    showNotice(e.kind || 'blocked');
   } finally {
     setStatus('');
     $('go').disabled = false; $('go').textContent = '가져오기';
   }
 }
-function showError(msg) {
-  $('error').textContent = msg;
-  $('error').classList.remove('hidden');
+
+function cleanPasted() {
+  const segs = parseTranscriptText($('pasteIn').value);
+  if (!segs.length) {
+    $('notice').innerHTML = `<div class="head">✍️ 붙여넣은 내용이 없어요</div>
+      <p>유튜브의 「스크립트 표시」 창에서 글을 복사해서 위 칸에 붙여넣어 주세요. 방법은 <a href="#" data-goto="help">❓ 다른 방법</a> ②에 있어요.</p>`;
+    $('notice').classList.remove('hidden');
+    return;
+  }
+  hideNotice();
+  const vid = extractVideoId($('url').value);
+  showResult({ videoId: vid, title: $('pasteTitle').value.trim(), author: '', segments: segs, source: 'paste' });
 }
 
+function switchTab(name) {
+  for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === name);
+  for (const t of ['url', 'paste', 'help']) $('tab-' + t).classList.toggle('hidden', t !== name);
+  if (name !== 'url') hideNotice();
+  const vid = extractVideoId($('url').value);
+  $('openYt').innerHTML = vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">→ 이 영상 열기</a>` : '';
+}
+
+// ── 이벤트 ──
 $('form').addEventListener('submit', (e) => { e.preventDefault(); data = null; load(); });
+$('url').addEventListener('paste', (e) => {
+  const txt = e.clipboardData?.getData('text') || '';
+  // 주소 칸에 스크립트 글을 붙여넣은 경우: 줄바꿈이 사라지기 전에 붙여넣기 탭으로 옮긴다
+  if (txt && !extractVideoId(txt) && (txt.length > 40 || txt.includes('\n'))) {
+    e.preventDefault();
+    $('pasteIn').value = txt; switchTab('paste'); cleanPasted(); return;
+  }
+  setTimeout(() => { data = null; load(); }, 0);
+});
 $('lang').addEventListener('change', () => load($('lang').value));
 $('ts').addEventListener('change', render);
 $('prefix').addEventListener('change', render);
-$('url').addEventListener('paste', () => setTimeout(() => { data = null; load(); }, 0));
+$('cleanBtn').addEventListener('click', cleanPasted);
+for (const b of document.querySelectorAll('.tabs button')) b.addEventListener('click', () => switchTab(b.dataset.tab));
+
+// 안내문 안의 버튼들 (나중에 그려지는 것도 포함)
+document.addEventListener('click', async (e) => {
+  const go = e.target.closest('[data-goto]');
+  if (go) { e.preventDefault(); switchTab(go.dataset.goto); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  const act = e.target.closest('[data-action]');
+  if (!act) return;
+  if (act.dataset.action === 'retry') {
+    switchTab('url');
+    if ($('url').value.trim()) { data = null; load(); } else $('url').focus();
+  }
+  if (act.dataset.action === 'copyBm') {
+    try { await navigator.clipboard.writeText(BOOKMARKLET); $('bmMsg').textContent = '✅ 복사됐어요'; }
+    catch { $('bmMsg').textContent = '복사가 안 됐어요. 파란 버튼을 길게 눌러 「링크 복사」를 써 주세요.'; }
+  }
+});
 
 $('copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText($('out').value); }
@@ -266,7 +512,6 @@ $('download').addEventListener('click', () => {
   a.click();
   URL.revokeObjectURL(a.href);
 });
-
 $('pc').addEventListener('click', (e) => {
   e.preventDefault();
   const pc = document.body.classList.toggle('pc');
