@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>유튜브 스크립트 추출기</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f4f4f2; --card: #fcfcfb; --border: #e3e2de; --text: #0b0b0b; --sub: #85847f; --btn2: #e8e7e3; --accent: #e60023; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111110; --card: #1a1a19; --border: #31312e; --text: #f0efec; --sub: #8d8c85; --btn2: #2a2a28; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 32px; }
+  body.pc main { max-width: 960px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 16px; color: var(--sub); font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  form { display: flex; gap: 8px; }
+  input[type=text] { flex: 1; min-width: 0; padding: 12px; font-size: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: inherit; }
+  button { padding: 12px 14px; font-size: 15px; font-weight: 600; border: 0; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.secondary { background: var(--btn2); color: var(--text); }
+  .options { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 14px; margin-bottom: 10px; }
+  select { padding: 6px 8px; font-size: 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: inherit; max-width: 200px; }
+  label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  textarea { width: 100%; height: 50vh; padding: 12px; font: 15px/1.6 inherit; font-family: inherit; border: 1px solid var(--border); border-radius: 10px; resize: vertical; background: var(--bg); color: inherit; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .meta { font-size: 13px; color: var(--sub); margin-left: auto; }
+  .title { font-weight: 600; margin: 0 0 10px; }
+  .error { color: #d33; font-size: 14px; margin-top: 10px; white-space: pre-line; }
+  .status { color: var(--sub); font-size: 13px; margin-top: 8px; }
+  .hidden { display: none; }
+  footer { text-align: center; font-size: 13px; color: var(--sub); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>📝 유튜브 스크립트 추출기</h1>
+  <p class="sub">유튜브 주소를 붙여넣으면 자막을 텍스트로 정리해 줘요. 복사해서 Claude에 바로 붙여넣으세요.</p>
+
+  <div class="card">
+    <form id="form">
+      <input id="url" type="text" placeholder="유튜브 주소 붙여넣기" autocomplete="off" />
+      <button id="go" type="submit">가져오기</button>
+    </form>
+    <div id="status" class="status hidden"></div>
+    <div id="error" class="error hidden"></div>
+  </div>
+
+  <div id="result" class="card hidden">
+    <p id="title" class="title"></p>
+    <div class="options">
+      <label>언어 <select id="lang"></select></label>
+      <label><input type="checkbox" id="ts" /> 타임스탬프</label>
+      <label><input type="checkbox" id="prefix" checked /> 제목·안내문</label>
+    </div>
+    <textarea id="out" readonly></textarea>
+    <div class="row">
+      <button id="copy" type="button">📋 전체 복사</button>
+      <button id="download" type="button" class="secondary">💾 .txt 저장</button>
+      <span id="meta" class="meta"></span>
+    </div>
+  </div>
+
+  <footer><a href="../">← 사이트 목록</a> · <a href="#" id="pc">PC 버전으로 보기</a></footer>
+</main>
+
+<script>
+// ── 자막 서버 주소 ─────────────────────────────────────────────
+// Vercel에 이 저장소를 올리면 생기는 주소를 넣는다 (예: 'https://personal-site-xxx.vercel.app').
+// 비워 두면 공개 미러(Invidious)로만 시도한다.
+const API_SERVER = '';
+// 공개 미러: 유튜브 자막을 대신 전달해 주는 무료 서버들. 자주 바뀌거나 막힌다.
+const MIRRORS = ['https://inv.nadeko.net', 'https://yewtu.be', 'https://invidious.nerdvpn.de', 'https://invidious.f5.si'];
+
+const $ = (id) => document.getElementById(id);
+let data = null;
+
+function extractVideoId(input) {
+  const s = String(input || '').trim();
+  if (/^[\w-]{11}$/.test(s)) return s;
+  let u;
+  try { u = new URL(s.startsWith('http') ? s : 'https://' + s); } catch { return null; }
+  const host = u.hostname.replace(/^www\.|^m\.|^music\./, '');
+  if (host === 'youtu.be') return u.pathname.slice(1, 12) || null;
+  if (host.endsWith('youtube.com')) {
+    const v = u.searchParams.get('v');
+    if (v) return v.slice(0, 11);
+    const m = u.pathname.match(/\/(?:shorts|embed|live|v)\/([\w-]{11})/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+// ── 방법 1: 내 자막 서버 (Vercel) ──
+const ON_SERVER = location.hostname.endsWith('vercel.app') || location.hostname === 'localhost';
+const HAS_SERVER = ON_SERVER || !!API_SERVER;
+function apiBase() { return ON_SERVER ? '' : API_SERVER.replace(/\/$/, ''); }
+async function viaServer(url, lang) {
+  const qs = new URLSearchParams({ url });
+  if (lang) qs.set('lang', lang);
+  const res = await fetch(apiBase() + '/api/transcript?' + qs);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || '서버 오류');
+  return json;
+}
+
+// ── 방법 2: 공개 미러 (Invidious) ──
+function parseVtt(vtt) {
+  const out = [];
+  const toSec = (t) => t.split(':').reduce((a, b) => a * 60 + parseFloat(b), 0);
+  let last = '';
+  for (const block of vtt.replace(/\r/g, '').split(/\n\n+/)) {
+    const lines = block.split('\n');
+    const i = lines.findIndex((l) => l.includes('-->'));
+    if (i < 0) continue;
+    const start = toSec(lines[i].split('-->')[0].trim());
+    const tmp = document.createElement('textarea');
+    for (const raw of lines.slice(i + 1)) {
+      tmp.innerHTML = raw.replace(/<[^>]+>/g, '');
+      const text = tmp.value.replace(/\s+/g, ' ').trim();
+      // 자동 생성 자막은 같은 줄이 겹쳐서 반복되므로 직전 줄과 같으면 건너뛴다
+      if (text && text !== last) { out.push({ start, text }); last = text; }
+    }
+  }
+  return out;
+}
+async function fetchJson(u) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(u, { signal: ctl.signal });
+    if (!r.ok) throw new Error(r.status);
+    return r;
+  } finally { clearTimeout(timer); }
+}
+async function viaMirror(videoId, lang) {
+  let lastErr;
+  for (const base of MIRRORS) {
+    try {
+      setStatus(`공개 미러에서 가져오는 중… (${new URL(base).hostname})`);
+      const list = await (await fetchJson(`${base}/api/v1/captions/${videoId}`)).json();
+      const caps = list.captions || [];
+      if (!caps.length) throw new Error('이 영상에는 자막이 없습니다.');
+      const tracks = caps.map((c) => ({ id: c.label, name: c.label, code: c.languageCode || c.language_code || '', url: c.url }));
+      const pick = (lang && tracks.find((t) => t.id === lang)) ||
+        tracks.find((t) => t.code.startsWith('ko') && !/auto|자동/i.test(t.name)) ||
+        tracks.find((t) => !/auto|자동/i.test(t.name)) || tracks[0];
+      const vtt = await (await fetchJson(base + pick.url)).text();
+      const segments = parseVtt(vtt);
+      if (!segments.length) throw new Error('자막 내용이 비어 있습니다.');
+      let info = {};
+      try { info = await (await fetchJson(`${base}/api/v1/videos/${videoId}?fields=title,author`)).json(); } catch {}
+      return { videoId, title: info.title || '', author: info.author || '', selected: pick.id,
+        tracks: tracks.map(({ id, name }) => ({ id, name })), segments, source: 'mirror' };
+    } catch (e) {
+      lastErr = e;
+      if (e.message === '이 영상에는 자막이 없습니다.') throw e;
+    }
+  }
+  throw new Error('공개 미러가 모두 응답하지 않았습니다' + (lastErr ? ` (${lastErr.message || lastErr})` : ''));
+}
+
+// ── 텍스트 만들기 ──
+function fmtTime(sec) {
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+function buildText() {
+  if (!data) return '';
+  let body;
+  if ($('ts').checked) {
+    body = data.segments.map((s) => `[${fmtTime(s.start)}] ${s.text}`).join('\n');
+  } else {
+    // 문장을 이어 붙이고, 8초 이상 끊기거나 400자가 넘은 문장 끝에서 문단을 나눈다
+    const paras = [];
+    let cur = '';
+    data.segments.forEach((s, i) => {
+      const prev = data.segments[i - 1];
+      const gap = prev ? s.start - prev.start : 0;
+      if (cur && ((cur.length > 400 && /[.?!。]$/.test(cur)) || gap > 8)) { paras.push(cur); cur = ''; }
+      cur += (cur ? ' ' : '') + s.text;
+    });
+    if (cur) paras.push(cur);
+    body = paras.join('\n\n');
+  }
+  if ($('prefix').checked) {
+    const t = data.title ? `"${data.title}"${data.author ? ` (${data.author})` : ''}` : '';
+    body = `다음은 유튜브 영상 ${t}의 스크립트입니다.\nhttps://www.youtube.com/watch?v=${data.videoId}\n\n` + body;
+  }
+  return body;
+}
+function render() {
+  const text = buildText();
+  $('out').value = text;
+  $('meta').textContent = `${text.length.toLocaleString()}자`;
+}
+function setStatus(msg) {
+  $('status').textContent = msg || '';
+  $('status').classList.toggle('hidden', !msg);
+}
+
+async function load(lang) {
+  const url = $('url').value.trim();
+  if (!url) return;
+  $('error').classList.add('hidden');
+  const videoId = extractVideoId(url);
+  if (!videoId) { showError('올바른 유튜브 주소가 아닙니다.'); return; }
+  $('go').disabled = true; $('go').textContent = '불러오는 중…';
+  try {
+    let result;
+    // 언어만 바꾸는 경우엔 처음 가져온 곳에서 다시 가져온다
+    const useMirror = !HAS_SERVER || (lang && data && data.source === 'mirror');
+    if (!useMirror) {
+      setStatus('자막 서버에서 가져오는 중…');
+      try { result = await viaServer(url, lang); }
+      catch (e) {
+        if (/자막\(스크립트\)이 없습니다|올바른/.test(e.message)) throw e;
+        result = await viaMirror(videoId, lang);
+      }
+    } else {
+      result = await viaMirror(videoId, lang);
+    }
+    data = result;
+    $('title').textContent = data.title || data.videoId;
+    $('lang').innerHTML = '';
+    for (const t of data.tracks) {
+      const o = document.createElement('option');
+      o.value = t.id; o.textContent = t.name; o.selected = t.id === data.selected;
+      $('lang').appendChild(o);
+    }
+    $('result').classList.remove('hidden');
+    render();
+  } catch (e) {
+    showError(e.message || String(e));
+  } finally {
+    setStatus('');
+    $('go').disabled = false; $('go').textContent = '가져오기';
+  }
+}
+function showError(msg) {
+  $('error').textContent = msg;
+  $('error').classList.remove('hidden');
+}
+
+$('form').addEventListener('submit', (e) => { e.preventDefault(); data = null; load(); });
+$('lang').addEventListener('change', () => load($('lang').value));
+$('ts').addEventListener('change', render);
+$('prefix').addEventListener('change', render);
+$('url').addEventListener('paste', () => setTimeout(() => { data = null; load(); }, 0));
+
+$('copy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('out').value); }
+  catch { $('out').select(); document.execCommand('copy'); }
+  $('copy').textContent = '✅ 복사됨!';
+  setTimeout(() => ($('copy').textContent = '📋 전체 복사'), 1500);
+});
+$('download').addEventListener('click', () => {
+  const blob = new Blob([$('out').value], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${(data?.title || 'transcript').replace(/[\\/:*?"<>|]/g, '_')}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+$('pc').addEventListener('click', (e) => {
+  e.preventDefault();
+  const pc = document.body.classList.toggle('pc');
+  $('pc').textContent = pc ? '모바일 버전으로 보기' : 'PC 버전으로 보기';
+});
+</script>
+</body>
+</html>

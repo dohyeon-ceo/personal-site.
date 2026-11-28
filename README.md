@@ -6,6 +6,7 @@
 | 폴더 | 내용 |
 |---|---|
 | [`stock-dashboard/`](stock-dashboard/) | **FIT (Find Top)** — 미국 S&P 500 기업의 PER·성장률을 분야별로 비교하는 대시보드 (모바일 중심, 매일 자동 갱신) |
+| [`youtube-script/`](youtube-script/) | **유튜브 스크립트 추출기** — 유튜브 주소를 넣으면 자막을 텍스트로 정리해 복사·저장 (개인용) |
 
 ## 배포 (GitHub Pages)
 
